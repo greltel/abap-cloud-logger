@@ -25,7 +25,7 @@ It acts as a fluent wrapper around the standard class `CL_BALI_LOG`, simplifying
 
 # Prerequisites
 
-* SAP S/4HANA 2021 (or higher) OR SAP BTP ABAP Environment.
+* SAP S/4HANA 2023 (or higher) OR SAP BTP ABAP Environment.
 * XCO library availability
 * Statement Compatibility from v758 and Cloud
 
