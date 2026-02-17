@@ -45,8 +45,8 @@ The goal is to provide an easy-to-use logger that fits naturally into cloud-read
 To start logging, get an instance of the logger by providing your Application Log Object and Subobject (defined in Eclipse as Application Log Object).
 
 ```abap
-DATA(lo_logger) = zcl_cloud_logger=>get_instance( iv_object    = 'Z_CLOUD_LOG_SAMPLE'
-                                                  iv_subobject = 'SETUP' ).
+DATA(logger) = zcl_cloud_logger=>get_instance( object    = 'Z_CLOUD_LOG_SAMPLE'
+                                                subobject = 'SETUP' ).
 ```
 
 ### 2. Exception Add
@@ -56,106 +56,106 @@ TRY.
     " Your business logic here
     DATA(result) = 100 / 0.
 
-  CATCH cx_sy_zerodivide INTO DATA(lx_error).
+  CATCH cx_sy_zerodivide INTO DATA(error).
     " Pass the exception object to the logger
-    lo_logger->log_exception_add( lx_error ).
+    lo_logger->log_exception_add( error ).
 ENDTRY.
 ```
 
 ### 3. Message Add
 
 ```abap
-lo_logger->log_message_add( iv_symsg = VALUE #( msgty = 'W'
-                                                msgid = 'CL'
-                                                msgno = '000'
-                                                msgv1 = 'Test Message' ) ).
+logger->log_message_add( isymsg = VALUE #( msgty = 'W'
+                                           msgid = 'CL'
+                                           msgno = '000'
+                                           msgv1 = 'Test Message' ) ).
 ```
                             
 ### 4. String Add
 
 ```abap
-lo_logger->log_string_add( iv_string = 'String Add'
-                           iv_msgty  = 'E'  ).
+logger->log_string_add( string = 'String Add'
+                        msgty  = 'E'  ).
 ```
 ### 5. BAPIRET2 Structure and Table Add with Smart Filtering
 
 ```abap
-lo_logger->log_bapiret2_table_add( 
-    it_bapiret2_t   = lt_return
-    iv_min_severity = 'E' 
+logger->log_bapiret2_table_add( 
+    bapiret2_t   = return
+    min_severity = 'E' 
 )->save( )
 
-lo_logger->log_bapiret2_structure_add( VALUE #( ) ) .
+logger->log_bapiret2_structure_add( VALUE #( ) ) .
 ```
 
 ### 6. Advanced Data Logging (JSON)
 
 ```abap
-SELECT * FROM t001 INTO TABLE @DATA(lt_company_codes) UP TO 10 ROWS.
+SELECT * FROM t001 INTO TABLE @DATA(company_codes) UP TO 10 ROWS.
 
 " Log the whole table as JSON
-lo_logger->log_data_add( lt_company_codes )->save_application_log( ).
+lo_logger->log_data_add( company_codes )->save_application_log( ).
 ```
 
 ### 7. Get Messages
 
 ```abap
-DATA(lv_message_count)     = lo_logger->get_message_count( ).
+DATA(message_count)     = lo_logger->get_message_count( ).
 
-DATA(lt_messages_bapiret2) = lo_logger->get_messages_as_bapiret2( ).
+DATA(messages_bapiret2) = lo_logger->get_messages_as_bapiret2( ).
 
-DATA(lt_messages)          = lo_logger->get_messages( ).
+DATA(messages)          = lo_logger->get_messages( ).
 
-DATA(lt_messages_flat)     = lo_logger->get_messages_flat( ).
+DATA(messages_flat)     = lo_logger->get_messages_flat( ).
 
-DATA(lt_messages_rap)      = lo_logger->get_messages_rap( ).
+DATA(messages_rap)      = lo_logger->get_messages_rap( ).
 ```
 
 ### 8. Functional Methods
 
 ```abap
-DATA(lv_error_exists)   = lo_logger->log_contains_error( ).
+DATA(error_exists)   = lo_logger->log_contains_error( ).
 
-DATA(lv_messages_exist) = lo_logger->log_contains_messages( ).
+DATA(messages_exist) = lo_logger->log_contains_messages( ).
 
-DATA(lv_warning_exists) = lo_logger->log_contains_warning( ).
+DATA(warning_exists) = lo_logger->log_contains_warning( ).
 
-DATA(lv_is_empty)       = lo_logger->log_is_empty( ).
+DATA(is_empty)       = lo_logger->log_is_empty( ).
 ```
 
 ### 9. Get Log Handle
 
 ```abap
-DATA(lv_handle)         = lo_logger->get_handle( ).
+DATA(handle)         = logger->get_handle( ).
 
-DATA(lv_log_handle)     = lo_logger->get_log_handle( ).
+DATA(log_handle)     = logger->get_log_handle( ).
 ```
 
 ### 10. Save Application Log
 
 ```abap
-lo_logger->save_application_log( ).
+logger->save_application_log( ).
 ```
 
 ### 11. Search for a Specific Message
 
 ```abap
-data(lv_specific_message_exists) = lo_logger->search_message( im_search = VALUE #( msgid = '00' ) ).
+data(specific_message_exists) = lo_logger->search_message( search = VALUE #( msgid = '00' ) ).
 ```
 
 ### 12. Merge Logs
 
 ```abap
 "Get a New Log Instance
-DATA(lo_new_logger) = zcl_cloud_logger=>get_instance( iv_object    = 'Z_MY_OBJECT_NEW'
-                                                      iv_subobject = 'Z_MY_SUBOBJECT_NEW' ).
+DATA(new_logger) = zcl_cloud_logger=>get_instance( object    = 'Z_MY_OBJECT_NEW'
+                                                    subobject = 'Z_MY_SUBOBJECT_NEW' ).
 
 "Add Message
-lo_new_logger->log_string_add( iv_string = 'New Logger String'
-                               iv_msgty  = 'E'  ).
+new_logger->log_string_add( string = 'New Logger String'
+                            msgty  = 'E'  ).
 
 "Merge with Previous Log
-lo_logger->merge_logs( lo_new_logger ).
+logger->merge_logs( new_logger ).
 ```
 
 ### 13. Reset Log
@@ -168,27 +168,27 @@ lo_logger->reset_appl_log( im_delete_from_db = abap_true ).
 
 ```abap
 " 1. Start the stopwatch
-lo_logger->start_timer( ).
+logger->start_timer( ).
 
 " 2. Execute a code block
 "SELECT FROM.....
 
 " 3. Stop and log the duration automatically
-lo_logger->stop_timer( 'Test Timer' ).
+logger->stop_timer( 'Test Timer' ).
 ```
 
 ### 14. Viewer
 
 ```abap
-lo_logger->display( NEW zcl_cloud_logger_view_alv( ) ).
+logger->display( NEW zcl_cloud_logger_view_alv( ) ).
 ```
 
 ### 15. Sticky Tags
 
 ```abap
-lo_logger->set_context( 'Order 100' ).
-lo_logger->log_string_add( 'Price checked' )."[Order 100] Price checked logged
-lo_logger->clear_context( ).
+logger->set_context( 'Order 100' ).
+logger->log_string_add( 'Price checked' )."[Order 100] Price checked logged
+logger->clear_context( ).
 ```
 
 ## Design Goals-Features
