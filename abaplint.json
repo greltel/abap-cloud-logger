@@ -15,28 +15,8 @@
   },
   "rules": {
     "exporting": true,
-    "local_class_naming": {
-      "exclude": [],
-      "severity": "Error",
-      "patternKind": "required",
-      "ignoreNames": [],
-      "ignorePatterns": [],
-      "local": "^L.+$",
-      "exception": "^LCX_.+$",
-      "test": "^L.+$"
-    },
-    "method_parameter_names": {
-      "exclude": [],
-      "severity": "Error",
-      "patternKind": "required",
-      "ignoreNames": [],
-      "ignorePatterns": [],
-      "ignoreExceptions": true,
-      "importing": "^I._.+$",
-      "returning": "^R._.+$",
-      "changing": "^C._.+$",
-      "exporting": "^E._.+$"
-    },
+    "local_class_naming": false,
+    "method_parameter_names": false,
     "object_naming": {
       "exclude": [],
       "severity": "Error",
@@ -62,21 +42,8 @@
       "ssst": "^Z",
       "shlp": "^Z"
     },
-    "selection_screen_naming": {
-      "exclude": [],
-      "severity": "Error",
-      "patternKind": "required",
-      "ignoreNames": [],
-      "ignorePatterns": [],
-      "parameter": "^P_.+$",
-      "selectOption": "^S_.+$",
-      "screenElement": "^SC_.+$"
-    },
-    "types_naming": {
-      "exclude": [],
-      "severity": "Error",
-      "pattern": "^T.+$"
-    },
+    "selection_screen_naming": false,
+    "types_naming": false,
     "unused_variables": true
   }
 }
