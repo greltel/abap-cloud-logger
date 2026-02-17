@@ -194,7 +194,7 @@ lo_logger->clear_context( ).
 ## Design Goals-Features
 
 * Install via [ABAPGit](http://abapgit.org)
-* ABAP Cloud/Clean Core compatibility.Passed SCI check variant S4HANA_READINESS_2023 and ABAP_CLOUD_READINESS
+* ABAP Cloud/Clean Core compatibility.Passed SCI check variant S4HANA_READINESS_2023 and ABAP_CLOUD_READINESS/SAP_CP_READINESS
 * Clean Code following [Clean ABAP Style Guides](https://github.com/SAP/styleguides/blob/main/clean-abap/CleanABAP.md)
 * Based on [CL_BALI_LOG](https://help.sap.com/docs/btp/sap-business-technology-platform/cl-bali-log-interface-if-bali-log) which is released for Cloud Development (could also use XCO_CP_BAL)
 * Based on Multiton Design Pattern for efficient management of log instances
