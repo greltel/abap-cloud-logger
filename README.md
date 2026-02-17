@@ -46,7 +46,7 @@ To start logging, get an instance of the logger by providing your Application Lo
 
 ```abap
 DATA(logger) = zcl_cloud_logger=>get_instance( object    = 'Z_CLOUD_LOG_SAMPLE'
-                                                subobject = 'SETUP' ).
+                                               subobject = 'SETUP' ).
 ```
 
 ### 2. Exception Add
