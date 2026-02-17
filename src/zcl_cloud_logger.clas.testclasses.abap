@@ -37,11 +37,11 @@ CLASS ltc_external_methods IMPLEMENTATION.
   METHOD setup.
 
     mo_log = zcl_cloud_logger=>get_instance(
-      iv_object    = 'Z_CLOUD_LOG_SAMPLE'
-      iv_subobject = 'SETUP'
-      iv_db_save   = abap_true ).
+      object    = 'Z_CLOUD_LOG_SAMPLE'
+      subobject = 'SETUP'
+      db_save   = abap_true ).
 
-    mo_log->reset_appl_log( im_delete_from_db = abap_true ).
+    mo_log->reset_appl_log( delete_from_db = abap_true ).
 
   ENDMETHOD.
 
@@ -62,26 +62,26 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     TRY.
 
-        mo_log->log_message_add( iv_symsg = VALUE #( msgty = 'W'
-                                                        msgid = 'CL'
-                                                        msgno = '000'
-                                                        msgv1 = 'Test Message'
-                                                        msgv2 = ''
-                                                        msgv3 = ''
-                                                        msgv4 = '' ) ).
+        mo_log->log_message_add( symsg = VALUE #( msgty = 'W'
+                                                     msgid = 'CL'
+                                                     msgno = '000'
+                                                     msgv1 = 'Test Message'
+                                                     msgv2 = ''
+                                                     msgv3 = ''
+                                                     msgv4 = '' ) ).
 
         mo_log->log_bapiret2_structure_add( VALUE #( id         = 'Z_CLOUD_LOGGER'
-                                                        type       = 'W'
-                                                        number     = '002'
-                                                        message_v1 = 'TEST' ) ).
+                                                     type       = 'W'
+                                                     number     = '002'
+                                                     message_v1 = 'TEST' ) ).
 
         mo_log->log_bapiret2_table_add( VALUE #( id     = 'Z_CLOUD_LOGGER'
-                                                    type   = 'W'
-                                                    number = '002'
-                                                    ( message_v1 = 'BAPIS' )
-                                                    ( message_v1 = 'More' ) ) ).
+                                                 type   = 'W'
+                                                 number = '002'
+                                                 ( message_v1 = 'BAPIS' )
+                                                 ( message_v1 = 'More' ) ) ).
 
-        mo_log->log_exception_add( iv_exception = NEW cx_sy_itab_line_not_found( ) ).
+        mo_log->log_exception_add( exception = NEW cx_sy_itab_line_not_found( ) ).
 
         MESSAGE s003(z_aml) INTO DATA(dummy) ##NEEDED.
         mo_log->log_syst_add( ).
@@ -106,7 +106,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
   METHOD create_wrong_log.
 
     TRY.
-        DATA(mo_log_error) = zcl_cloud_logger=>get_instance( iv_db_save = abap_true iv_object = 'Z_DUMMY_WRONG' iv_subobject = 'Z_DUMMY_WRONG' ).
+        DATA(mo_log_error) = zcl_cloud_logger=>get_instance( db_save = abap_true object = 'Z_DUMMY_WRONG' subobject = 'Z_DUMMY_WRONG' ).
 
         cl_abap_unit_assert=>fail( ).
 
@@ -138,7 +138,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     TRY.
 
-        DATA(lo_second_logger) = zcl_cloud_logger=>get_instance( iv_object = 'Z_CLOUD_LOG_SAMPLE' iv_subobject = 'SETUP' iv_ext_number = '1234' iv_db_save = abap_false ).
+        DATA(lo_second_logger) = zcl_cloud_logger=>get_instance( object = 'Z_CLOUD_LOG_SAMPLE' subobject = 'SETUP' ext_number = '1234' db_save = abap_false ).
 
         MESSAGE e005(z_cloud_logger) INTO DATA(dummy2).
         lo_second_logger->log_syst_add( ).
@@ -161,7 +161,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     TRY.
 
-        mo_log->log_message_add( iv_symsg = VALUE #( msgty = 'W'
+        mo_log->log_message_add( symsg = VALUE #( msgty = 'W'
                                                 msgid = 'CL'
                                                 msgno = '000'
                                                 msgv1 = 'Test Message 1'
@@ -169,7 +169,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
                                                 msgv3 = ''
                                                 msgv4 = '' ) ).
 
-        mo_log->log_message_add( iv_symsg = VALUE #( msgty = 'E'
+        mo_log->log_message_add( symsg = VALUE #( msgty = 'E'
                                                         msgid = 'CL'
                                                         msgno = '000'
                                                         msgv1 = 'Test Message 2'
@@ -192,7 +192,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     TRY.
 
-        mo_log->log_message_add( iv_symsg = VALUE #( msgty = 'W'
+        mo_log->log_message_add( symsg = VALUE #( msgty = 'W'
                                                 msgid = 'CL'
                                                 msgno = '000'
                                                 msgv1 = 'Test Message 1'
@@ -200,7 +200,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
                                                 msgv3 = ''
                                                 msgv4 = '' ) ).
 
-        mo_log->log_message_add( iv_symsg = VALUE #( msgty = 'E'
+        mo_log->log_message_add( symsg = VALUE #( msgty = 'E'
                                                         msgid = 'CL'
                                                         msgno = '000'
                                                         msgv1 = 'Test Message 2'
@@ -223,7 +223,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     TRY.
 
-        mo_log->log_message_add( iv_symsg = VALUE #( msgty = 'W'
+        mo_log->log_message_add( symsg = VALUE #( msgty = 'W'
                                                 msgid = 'CL'
                                                 msgno = '000'
                                                 msgv1 = 'Test Message 1'
@@ -231,7 +231,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
                                                 msgv3 = ''
                                                 msgv4 = '' ) ).
 
-        DATA(lv_result) = mo_log->search_message( im_search = VALUE #( msgid = 'CL' ) ).
+        DATA(lv_result) = mo_log->search_message( search = VALUE #( msgid = 'CL' ) ).
 
         cl_abap_unit_assert=>assert_true( lv_result ).
         mo_log->reset_appl_log( ).
@@ -248,7 +248,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     TRY.
 
-        mo_log->log_message_add( iv_symsg = VALUE #( msgty = 'W'
+        mo_log->log_message_add( symsg = VALUE #( msgty = 'W'
                                                 msgid = 'CL'
                                                 msgno = '000'
                                                 msgv1 = 'Test Message 1'
@@ -256,9 +256,9 @@ CLASS ltc_external_methods IMPLEMENTATION.
                                                 msgv3 = ''
                                                 msgv4 = '' ) ).
 
-        DATA(lv_result) = mo_log->search_message( im_search = VALUE #( msgno = '003' ) ).
+        DATA(result) = mo_log->search_message( search = VALUE #( msgno = '003' ) ).
 
-        cl_abap_unit_assert=>assert_false( lv_result ).
+        cl_abap_unit_assert=>assert_false( result ).
         mo_log->reset_appl_log( ).
 
       CATCH zcx_cloud_logger_error INTO DATA(lo_exception).
@@ -273,7 +273,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     TRY.
 
-        mo_log->log_message_add( iv_symsg = VALUE #( msgty = 'W'
+        mo_log->log_message_add( symsg = VALUE #( msgty = 'W'
                                                 msgid = 'CL'
                                                 msgno = '000'
                                                 msgv1 = 'Test Message 1'
@@ -281,7 +281,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
                                                 msgv3 = ''
                                                 msgv4 = '' ) ).
 
-        DATA(lv_result) = mo_log->search_message( im_search = VALUE #( msgid = 'CL' msgno = '000' msgty = 'W' ) ).
+        DATA(lv_result) = mo_log->search_message( search = VALUE #( msgid = 'CL' msgno = '000' msgty = 'W' ) ).
 
         cl_abap_unit_assert=>assert_true( lv_result ).
         mo_log->reset_appl_log( ).
@@ -394,11 +394,11 @@ CLASS ltc_external_methods IMPLEMENTATION.
                                             ( message_v1 = 'BAPIS' )
                                             ( message_v1 = 'More' ) ) ).
 
-        mo_log->log_exception_add( iv_exception = NEW cx_sy_itab_line_not_found( ) ).
+        mo_log->log_exception_add( exception = NEW cx_sy_itab_line_not_found( ) ).
 
         "GET SAME INSTANCE BACK
-        DATA(lr_same_instance) = zcl_cloud_logger=>get_instance( iv_object    = 'Z_CLOUD_LOG_SAMPLE'
-                                                                  iv_subobject = 'SETUP' ).
+        DATA(lr_same_instance) = zcl_cloud_logger=>get_instance( object    = 'Z_CLOUD_LOG_SAMPLE'
+                                                                 subobject = 'SETUP' ).
 
         cl_abap_unit_assert=>assert_equals( exp = 3
                                             act = lr_same_instance->get_message_count( ) ).
@@ -432,7 +432,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
     TRY.
 
         " 1. Prepare Data: Success, Warning, Error
-        DATA: lt_bapi TYPE zif_cloud_logger=>tt_bapiret2.
+        DATA: lt_bapi TYPE zif_cloud_logger=>bapiret2_messages.
 
         lt_bapi = VALUE #(
             ( type = 'S' message = 'Success Msg' id = 'Z_CLOUD_LOGGER' number = '002' )
@@ -443,8 +443,8 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
         " 2. Act: Import ONLY Errors and above (Level 3+)
         mo_log->log_bapiret2_table_add(
-            it_bapiret2_t   = lt_bapi
-            iv_min_severity = 'E'
+            bapiret2_t   = lt_bapi
+            min_severity = 'E'
         ).
 
         " 3. Assert: We expect only 'E' and 'A' (2 messages)

@@ -10,14 +10,6 @@
     <STATE>1</STATE>
     <UNICODE>X</UNICODE>
    </VSEOINTERF>
-   <DESCRIPTIONS_SUB>
-    <SEOSUBCOTX>
-     <CMPNAME>VIEW</CMPNAME>
-     <SCONAME>IO_LOGGER</SCONAME>
-     <LANGU>E</LANGU>
-     <DESCRIPT>Cloud Logger Interface</DESCRIPT>
-    </SEOSUBCOTX>
-   </DESCRIPTIONS_SUB>
   </asx:values>
  </asx:abap>
 </abapGit>

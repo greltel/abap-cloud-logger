@@ -4,5 +4,5 @@ interface ZIF_CLOUD_LOGGER_VIEWER
 
   methods VIEW
     importing
-      !IO_LOGGER type ref to ZIF_CLOUD_LOGGER .
+      !LOGGER type ref to ZIF_CLOUD_LOGGER .
 endinterface.

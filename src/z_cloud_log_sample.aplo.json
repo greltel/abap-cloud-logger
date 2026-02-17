@@ -1,0 +1,13 @@
+{
+  "formatVersion": "1",
+  "header": {
+    "description": "ABAP Cloud Logger Sample Log Object",
+    "originalLanguage": "en"
+  },
+  "subobjects": [
+    {
+      "name": "SETUP",
+      "description": "Sample Setup Subobject"
+    }
+  ]
+}

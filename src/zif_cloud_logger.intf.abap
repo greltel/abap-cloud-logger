@@ -3,16 +3,16 @@ interface ZIF_CLOUD_LOGGER
 
 
   types:
-    tt_bapiret2 TYPE STANDARD TABLE OF bapiret2 WITH EMPTY KEY .
+    bapiret2_messages TYPE STANDARD TABLE OF bapiret2 WITH EMPTY KEY .
   types:
-    tt_rap_messages  TYPE STANDARD TABLE OF REF TO if_abap_behv_message WITH EMPTY KEY .
-  types TY_FLAT_MESSAGE type STRING .
+    rap_messages  TYPE STANDARD TABLE OF REF TO if_abap_behv_message WITH EMPTY KEY .
+  types FLAT_MESSAGE type STRING .
   types:
-    tt_flat_messages TYPE STANDARD TABLE OF TY_flat_message WITH EMPTY KEY .
+    flat_messages TYPE STANDARD TABLE OF flat_message WITH EMPTY KEY .
   types:
     BEGIN OF t_log_messages,
       symsg     TYPE symsg,
-      message   TYPE bapiret2-message,
+      message   TYPE bapi_msg,
       type      TYPE symsgty,
       user_name TYPE syuname,
       date      TYPE xsddate_d,
@@ -20,7 +20,7 @@ interface ZIF_CLOUD_LOGGER
       item      TYPE REF TO if_bali_item_setter,
     END OF t_log_messages .
   types:
-    tt_log_messages TYPE STANDARD TABLE OF t_log_messages WITH EMPTY KEY
+    log_messages TYPE STANDARD TABLE OF t_log_messages WITH EMPTY KEY
                     WITH NON-UNIQUE SORTED KEY key_search
                     COMPONENTS symsg-msgid symsg-msgno symsg-msgty .
   types:
@@ -31,7 +31,7 @@ interface ZIF_CLOUD_LOGGER
       logger        TYPE REF TO zif_cloud_logger,
     END OF t_logger_instance .
   types:
-    tt_logger_instances TYPE HASHED TABLE OF t_logger_instance
+    logger_instances TYPE HASHED TABLE OF t_logger_instance
                         WITH UNIQUE KEY log_object log_subobject extnumber .
 
   constants:
@@ -69,107 +69,107 @@ interface ZIF_CLOUD_LOGGER
 
   methods MERGE_LOGS
     importing
-      !IM_EXTERNAL_LOG type ref to ZIF_CLOUD_LOGGER .
+      !EXTERNAL_LOG type ref to ZIF_CLOUD_LOGGER .
   methods LOG_STRING_ADD
     importing
-      !IV_STRING type STRING
-      !IV_MSGTY type SYMSGTY default C_DEFAULT_MESSAGE_ATTRIBUTES-TYPE
+      !STRING type STRING
+      !MSGTY type SYMSGTY default C_DEFAULT_MESSAGE_ATTRIBUTES-TYPE
     returning
-      value(RO_LOGGER) type ref to ZIF_CLOUD_LOGGER .
+      value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
   methods LOG_MESSAGE_ADD
     importing
-      !IV_SYMSG type SYMSG optional
+      !SYMSG type SYMSG optional
     returning
-      value(RO_LOGGER) type ref to ZIF_CLOUD_LOGGER .
+      value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
   methods LOG_SYST_ADD
     returning
-      value(RO_LOGGER) type ref to ZIF_CLOUD_LOGGER .
+      value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
   methods LOG_EXCEPTION_ADD
     importing
-      !IV_SEVERITY type SYMSGTY default C_DEFAULT_MESSAGE_ATTRIBUTES-TYPE
-      !IV_EXCEPTION type ref to CX_ROOT
+      !SEVERITY type SYMSGTY default C_DEFAULT_MESSAGE_ATTRIBUTES-TYPE
+      !EXCEPTION type ref to CX_ROOT
     returning
-      value(RO_LOGGER) type ref to ZIF_CLOUD_LOGGER .
+      value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
   methods LOG_BAPIRET2_TABLE_ADD
     importing
-      !IT_BAPIRET2_T type TT_BAPIRET2
-      !IV_MIN_SEVERITY type SYMSGTY optional
+      !BAPIRET2_T type BAPIRET2_MESSAGES
+      !MIN_SEVERITY type SYMSGTY optional
     returning
-      value(RO_LOGGER) type ref to ZIF_CLOUD_LOGGER .
+      value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
   methods LOG_BAPIRET2_STRUCTURE_ADD
     importing
-      !IS_BAPIRET2 type BAPIRET2
+      !BAPIRET2 type BAPIRET2
     returning
-      value(RO_LOGGER) type ref to ZIF_CLOUD_LOGGER .
+      value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
   methods LOG_DATA_ADD
     importing
-      !IV_DATA type DATA
-      !IV_MSGTY type SYMSGTY default C_DEFAULT_MESSAGE_ATTRIBUTES-TYPE
+      !DATA type DATA
+      !MSGTY type SYMSGTY default C_DEFAULT_MESSAGE_ATTRIBUTES-TYPE
     returning
-      value(RO_LOGGER) type ref to ZIF_CLOUD_LOGGER .
+      value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
   methods SAVE_APPLICATION_LOG
     importing
       !IM_USE_2ND_DB_CONNECTION type ABAP_BOOLEAN default ABAP_FALSE
       !IM_ASSIGN_TO_CURRENT_APPL_JOB type ABAP_BOOLEAN default ABAP_FALSE .
   methods GET_MESSAGES
     returning
-      value(RE_RESULT) type TT_LOG_MESSAGES .
+      value(RESULT) type LOG_MESSAGES .
   methods GET_MESSAGES_FLAT
     returning
-      value(RE_RESULT) type TT_FLAT_MESSAGES .
+      value(RESULT) type FLAT_MESSAGES .
   methods GET_MESSAGES_AS_BAPIRET2
     returning
-      value(RE_BAPIRET2) type TT_BAPIRET2 .
+      value(BAPIRET2) type BAPIRET2_MESSAGES .
   methods GET_MESSAGES_RAP
     returning
-      value(RE_RESULT) type TT_RAP_MESSAGES .
+      value(RESULT) type RAP_MESSAGES .
   methods GET_HANDLE
     returning
-      value(RE_HANDLE) type BALLOGHNDL .
+      value(HANDLE) type BALLOGHNDL .
   methods GET_LOG_HANDLE
     returning
-      value(RE_RESULT) type ref to IF_BALI_LOG .
+      value(RESULT) type ref to IF_BALI_LOG .
   methods GET_MESSAGE_COUNT
     returning
-      value(RE_COUNT) type INT4 .
+      value(COUNT) type INT4 .
   methods RESET_APPL_LOG
     importing
-      !IM_DELETE_FROM_DB type ABAP_BOOL default ABAP_TRUE .
+      !DELETE_FROM_DB type ABAP_BOOL default ABAP_TRUE .
   methods LOG_IS_EMPTY
     returning
-      value(RE_RESULT) type ABAP_BOOLEAN .
+      value(RESULT) type ABAP_BOOLEAN .
   methods LOG_CONTAINS_MESSAGES
     returning
-      value(RE_RESULT) type ABAP_BOOLEAN .
+      value(RESULT) type ABAP_BOOLEAN .
   methods LOG_CONTAINS_ERROR
     returning
-      value(RE_RESULT) type ABAP_BOOLEAN .
+      value(RESULT) type ABAP_BOOLEAN .
   methods LOG_CONTAINS_WARNING
     returning
-      value(RE_RESULT) type ABAP_BOOLEAN .
+      value(RESULT) type ABAP_BOOLEAN .
   methods SEARCH_MESSAGE
     importing
-      !IM_SEARCH type SYMSG
+      !SEARCH type SYMSG
     returning
-      value(RE_RESULT) type ABAP_BOOLEAN .
+      value(RESULT) type ABAP_BOOLEAN .
   methods FREE .
   methods START_TIMER
     returning
-      value(RO_LOGGER) type ref to ZIF_CLOUD_LOGGER .
+      value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
   methods STOP_TIMER
     importing
-      !IV_TEXT type STRING optional
+      !TEXT type STRING optional
     returning
-      value(RO_LOGGER) type ref to ZIF_CLOUD_LOGGER .
+      value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
   methods DISPLAY
     importing
-      !IO_VIEWER type ref to ZIF_CLOUD_LOGGER_VIEWER .
+      !VIEWER type ref to ZIF_CLOUD_LOGGER_VIEWER .
   methods SET_CONTEXT
     importing
-      !IV_CONTEXT type STRING
+      !CONTEXT type STRING
     returning
-      value(RO_LOGGER) type ref to ZIF_CLOUD_LOGGER .
+      value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
   methods CLEAR_CONTEXT
     returning
-      value(RO_LOGGER) type ref to ZIF_CLOUD_LOGGER .
+      value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
 endinterface.
