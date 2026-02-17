@@ -27,6 +27,7 @@ It acts as a fluent wrapper around the standard class `CL_BALI_LOG`, simplifying
 
 * SAP S/4HANA 2021 (or higher) OR SAP BTP ABAP Environment.
 * XCO library availability
+* Statement Compatibility from v758 and Cloud
 
 ## License
 This project is licensed under the [MIT License](https://github.com/greltel/ABAP-Cloud-Logger/blob/main/LICENSE).
