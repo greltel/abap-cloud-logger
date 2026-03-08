@@ -3,9 +3,9 @@
 > If you spot a bug or have an idea for a cool enhancement, your contributions are more than welcome. Feel free to open an **Issue** or submit a **Pull Request**.
 
 ![Version](https://img.shields.io/badge/version-1.5.0-blue) 
-![ABAP Cloud](https://img.shields.io/badge/ABAP-Cloud%20Ready-green)
+[![ABAP Cloud](https://img.shields.io/badge/ABAP-Cloud%20Ready-green)](https://abaplint.app/stats/greltel/abap-cloud-logger/object_classifications)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/greltel/ABAP-Cloud-Logger/blob/main/LICENSE)
-![ABAP 7.00+](https://img.shields.io/badge/ABAP-7.58%2B-brightgreen)
+[![ABAP 7.00+](https://img.shields.io/badge/ABAP-7.58%2B-brightgreen)](https://abaplint.app/stats/greltel/abap-cloud-logger/statement_compatibility)
 [![Code Statistics](https://img.shields.io/badge/CodeStatistics-abaplint-blue)](https://abaplint.app/stats/greltel/abap-cloud-logger)
 
 # Table of contents
