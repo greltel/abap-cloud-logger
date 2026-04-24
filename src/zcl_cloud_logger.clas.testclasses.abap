@@ -123,7 +123,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
         mo_log->log_string_add( 'Message to save' ).
 
-        mo_log->save_application_log( im_use_2nd_db_connection = abap_false ).
+        mo_log->save_application_log( use_2nd_db_connection = abap_false ).
 
         cl_abap_unit_assert=>assert_true( abap_true ).
 
@@ -345,7 +345,8 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     SELECT * FROM i_companycode INTO TABLE @DATA(lt_company_codes) UP TO 10 ROWS.
 
-    mo_log->log_data_add( lt_company_codes )->save_application_log( ).
+    mo_log->log_data_add( lt_company_codes )->save_application_log( async = abap_true ).
+    COMMIT WORK.
 
   ENDMETHOD.
 
@@ -506,7 +507,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     READ TABLE lt_msgs INTO DATA(lv_msg4) INDEX 4.
     IF lv_msg4 CS '['.
-         cl_abap_unit_assert=>fail( 'Context was not cleared properly' ).
+      cl_abap_unit_assert=>fail( 'Context was not cleared properly' ).
     ENDIF.
 
   ENDMETHOD.

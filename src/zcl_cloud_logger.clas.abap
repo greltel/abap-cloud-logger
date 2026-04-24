@@ -1,45 +1,79 @@
-"! <p class="shorttext synchronized" lang="en"></p>
+"! <p class="shorttext synchronized" lang="en">Cloud Logger Main</p>
 "!
-CLASS zcl_cloud_logger DEFINITION
-  PUBLIC
-  CREATE PRIVATE .
+class ZCL_CLOUD_LOGGER definition
+  public
+  create private .
 
-  PUBLIC SECTION.
-    INTERFACES zif_cloud_logger.
+public section.
 
-    ALIASES c_default_message_attributes FOR zif_cloud_logger~c_default_message_attributes.
-    ALIASES c_message_type               FOR zif_cloud_logger~c_message_type.
-    ALIASES c_select_options             FOR zif_cloud_logger~c_select_options.
-    ALIASES free                         FOR zif_cloud_logger~free.
-    ALIASES get_handle                   FOR zif_cloud_logger~get_handle.
-    ALIASES get_log_handle               FOR zif_cloud_logger~get_log_handle.
-    ALIASES get_messages                 FOR zif_cloud_logger~get_messages.
-    ALIASES get_messages_as_bapiret2     FOR zif_cloud_logger~get_messages_as_bapiret2.
-    ALIASES get_messages_flat            FOR zif_cloud_logger~get_messages_flat.
-    ALIASES get_messages_rap             FOR zif_cloud_logger~get_messages_rap.
-    ALIASES get_message_count            FOR zif_cloud_logger~get_message_count.
-    ALIASES log_bapiret2_structure_add   FOR zif_cloud_logger~log_bapiret2_structure_add.
-    ALIASES log_bapiret2_table_add       FOR zif_cloud_logger~log_bapiret2_table_add.
-    ALIASES log_contains_error           FOR zif_cloud_logger~log_contains_error.
-    ALIASES log_contains_messages        FOR zif_cloud_logger~log_contains_messages.
-    ALIASES log_contains_warning         FOR zif_cloud_logger~log_contains_warning.
-    ALIASES log_data_add                 FOR zif_cloud_logger~log_data_add.
-    ALIASES log_exception_add            FOR zif_cloud_logger~log_exception_add.
-    ALIASES log_is_empty                 FOR zif_cloud_logger~log_is_empty.
-    ALIASES log_message_add              FOR zif_cloud_logger~log_message_add.
-    ALIASES log_string_add               FOR zif_cloud_logger~log_string_add.
-    ALIASES log_syst_add                 FOR zif_cloud_logger~log_syst_add.
-    ALIASES merge_logs                   FOR zif_cloud_logger~merge_logs.
-    ALIASES reset_appl_log               FOR zif_cloud_logger~reset_appl_log.
-    ALIASES save_application_log         FOR zif_cloud_logger~save_application_log.
-    ALIASES search_message               FOR zif_cloud_logger~search_message.
-    ALIASES bapiret2_messages            FOR zif_cloud_logger~bapiret2_messages.
-    ALIASES flat_messages                FOR zif_cloud_logger~flat_messages.
-    ALIASES logger_instances_type        FOR zif_cloud_logger~logger_instances.
-    ALIASES log_messages_type            FOR zif_cloud_logger~log_messages.
-    ALIASES rap_messages                 FOR zif_cloud_logger~rap_messages.
-    ALIASES flat_message                 FOR zif_cloud_logger~flat_message.
-    ALIASES logger_instance              FOR zif_cloud_logger~t_logger_instance.
+  interfaces ZIF_CLOUD_LOGGER .
+
+  aliases C_DEFAULT_MESSAGE_ATTRIBUTES
+    for ZIF_CLOUD_LOGGER~C_DEFAULT_MESSAGE_ATTRIBUTES .
+  aliases C_MESSAGE_TYPE
+    for ZIF_CLOUD_LOGGER~C_MESSAGE_TYPE .
+  aliases C_SELECT_OPTIONS
+    for ZIF_CLOUD_LOGGER~C_SELECT_OPTIONS .
+  aliases FREE
+    for ZIF_CLOUD_LOGGER~FREE .
+  aliases GET_HANDLE
+    for ZIF_CLOUD_LOGGER~GET_HANDLE .
+  aliases GET_LOG_HANDLE
+    for ZIF_CLOUD_LOGGER~GET_LOG_HANDLE .
+  aliases GET_MESSAGES
+    for ZIF_CLOUD_LOGGER~GET_MESSAGES .
+  aliases GET_MESSAGES_AS_BAPIRET2
+    for ZIF_CLOUD_LOGGER~GET_MESSAGES_AS_BAPIRET2 .
+  aliases GET_MESSAGES_FLAT
+    for ZIF_CLOUD_LOGGER~GET_MESSAGES_FLAT .
+  aliases GET_MESSAGES_RAP
+    for ZIF_CLOUD_LOGGER~GET_MESSAGES_RAP .
+  aliases GET_MESSAGE_COUNT
+    for ZIF_CLOUD_LOGGER~GET_MESSAGE_COUNT .
+  aliases LOG_BAPIRET2_STRUCTURE_ADD
+    for ZIF_CLOUD_LOGGER~LOG_BAPIRET2_STRUCTURE_ADD .
+  aliases LOG_BAPIRET2_TABLE_ADD
+    for ZIF_CLOUD_LOGGER~LOG_BAPIRET2_TABLE_ADD .
+  aliases LOG_CONTAINS_ERROR
+    for ZIF_CLOUD_LOGGER~LOG_CONTAINS_ERROR .
+  aliases LOG_CONTAINS_MESSAGES
+    for ZIF_CLOUD_LOGGER~LOG_CONTAINS_MESSAGES .
+  aliases LOG_CONTAINS_WARNING
+    for ZIF_CLOUD_LOGGER~LOG_CONTAINS_WARNING .
+  aliases LOG_DATA_ADD
+    for ZIF_CLOUD_LOGGER~LOG_DATA_ADD .
+  aliases LOG_EXCEPTION_ADD
+    for ZIF_CLOUD_LOGGER~LOG_EXCEPTION_ADD .
+  aliases LOG_IS_EMPTY
+    for ZIF_CLOUD_LOGGER~LOG_IS_EMPTY .
+  aliases LOG_MESSAGE_ADD
+    for ZIF_CLOUD_LOGGER~LOG_MESSAGE_ADD .
+  aliases LOG_STRING_ADD
+    for ZIF_CLOUD_LOGGER~LOG_STRING_ADD .
+  aliases LOG_SYST_ADD
+    for ZIF_CLOUD_LOGGER~LOG_SYST_ADD .
+  aliases MERGE_LOGS
+    for ZIF_CLOUD_LOGGER~MERGE_LOGS .
+  aliases RESET_APPL_LOG
+    for ZIF_CLOUD_LOGGER~RESET_APPL_LOG .
+  aliases SAVE_APPLICATION_LOG
+    for ZIF_CLOUD_LOGGER~SAVE_APPLICATION_LOG .
+  aliases SEARCH_MESSAGE
+    for ZIF_CLOUD_LOGGER~SEARCH_MESSAGE .
+  aliases BAPIRET2_MESSAGES
+    for ZIF_CLOUD_LOGGER~BAPIRET2_MESSAGES .
+  aliases FLAT_MESSAGE
+    for ZIF_CLOUD_LOGGER~FLAT_MESSAGE .
+  aliases FLAT_MESSAGES
+    for ZIF_CLOUD_LOGGER~FLAT_MESSAGES .
+  aliases LOGGER_INSTANCE
+    for ZIF_CLOUD_LOGGER~T_LOGGER_INSTANCE .
+  aliases LOGGER_INSTANCES_TYPE
+    for ZIF_CLOUD_LOGGER~LOGGER_INSTANCES .
+  aliases LOG_MESSAGES_TYPE
+    for ZIF_CLOUD_LOGGER~LOG_MESSAGES .
+  aliases RAP_MESSAGES
+    for ZIF_CLOUD_LOGGER~RAP_MESSAGES .
 
     "! <p class="shorttext synchronized">Get Cloud Logger Instance</p>
     "!
@@ -49,15 +83,16 @@ CLASS zcl_cloud_logger DEFINITION
     "! @parameter db_save         | <p class="shorttext synchronized">IV_DB_SAVE</p>
     "! @parameter expiry_date     | <p class="shorttext synchronized">Application Log: Expiration Date</p>
     "! @parameter logger_instance | <p class="shorttext synchronized">RE_LOGGER_INSTANCE</p>
-    CLASS-METHODS get_instance
-      IMPORTING enable_emergency_log   TYPE abap_boolean                          DEFAULT abap_false
-                !object                TYPE cl_bali_header_setter=>ty_object      OPTIONAL
-                subobject              TYPE cl_bali_header_setter=>ty_subobject   OPTIONAL
-                ext_number             TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
-                db_save                TYPE abap_boolean                          DEFAULT abap_false
-                expiry_date            TYPE xsddate_d                             OPTIONAL
-      RETURNING VALUE(logger_instance) TYPE REF TO zif_cloud_logger.
-
+  class-methods GET_INSTANCE
+    importing
+      !ENABLE_EMERGENCY_LOG type ABAP_BOOLEAN default ABAP_FALSE
+      !OBJECT type CL_BALI_HEADER_SETTER=>TY_OBJECT optional
+      !SUBOBJECT type CL_BALI_HEADER_SETTER=>TY_SUBOBJECT optional
+      !EXT_NUMBER type CL_BALI_HEADER_SETTER=>TY_EXTERNAL_ID optional
+      !DB_SAVE type ABAP_BOOLEAN default ABAP_FALSE
+      !EXPIRY_DATE type XSDDATE_D optional
+    returning
+      value(LOGGER_INSTANCE) type ref to ZIF_CLOUD_LOGGER .
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -564,20 +599,42 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
 
   METHOD zif_cloud_logger~save_application_log.
+    CHECK enable_emergency_log <> abap_true.
+    CHECK log_handle IS BOUND AND db_save = abap_true.
 
-    CHECK enable_emergency_log NE abap_true.
-    CHECK log_handle IS BOUND AND db_save EQ abap_true.
+"TO-BE IMPLEMENTED WITH BGPF
+*    IF async EQ abap_true.
+*
+*      TRY.
+*          DATA(lo_bg_op) = NEW zcl_cloud_logger_save_bg( iv_object      = object
+*                                                         iv_subobject   = subobject
+*                                                         iv_ext_number  = ext_number
+*                                                         iv_expiry_date = expiry_date
+*                                                         it_messages    = log_messages ).
+*
+*          DATA(lo_process) = cl_bgmc_process_factory=>get_default( )->create( ).
+*          lo_process->set_name( async_name ).
+*          lo_process->set_operation_tx_uncontrolled( lo_bg_op ).
+*          lo_process->save_for_execution( ).
+*
+*          RETURN.
+*
+*        CATCH cx_bgmc INTO DATA(lx_bgmc).
+*          RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_release
+*                                                      previous = lx_bgmc ).
+*      ENDTRY.
+*
+*    ENDIF.
 
     TRY.
         cl_bali_log_db=>get_instance( )->save_log( log                        = log_handle
-                                                   use_2nd_db_connection      = im_use_2nd_db_connection
-                                                   assign_to_current_appl_job = im_assign_to_current_appl_job ).
+                                                   use_2nd_db_connection      = use_2nd_db_connection
+                                                   assign_to_current_appl_job = assign_to_current_appl_job ).
 
       CATCH cx_bali_runtime INTO DATA(exception).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_release
                                                     previous = exception ).
     ENDTRY.
-
   ENDMETHOD.
 
 

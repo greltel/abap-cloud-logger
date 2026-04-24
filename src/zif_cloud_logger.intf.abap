@@ -109,8 +109,10 @@ interface ZIF_CLOUD_LOGGER
       value(LOGGER) type ref to ZIF_CLOUD_LOGGER .
   methods SAVE_APPLICATION_LOG
     importing
-      !IM_USE_2ND_DB_CONNECTION type ABAP_BOOLEAN default ABAP_FALSE
-      !IM_ASSIGN_TO_CURRENT_APPL_JOB type ABAP_BOOLEAN default ABAP_FALSE .
+      !USE_2ND_DB_CONNECTION type ABAP_BOOLEAN default ABAP_FALSE
+      !ASSIGN_TO_CURRENT_APPL_JOB type ABAP_BOOLEAN default ABAP_FALSE
+      !ASYNC type ABAP_BOOLEAN default ABAP_FALSE
+      !ASYNC_NAME type IF_BGMC_PROCESS=>TY_NAME default 'Background Logger Save' .
   methods GET_MESSAGES
     returning
       value(RESULT) type LOG_MESSAGES .
