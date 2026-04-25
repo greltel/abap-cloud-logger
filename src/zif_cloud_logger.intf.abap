@@ -12,7 +12,7 @@ INTERFACE zif_cloud_logger
   TYPES:
     BEGIN OF t_log_messages,
       symsg     TYPE symsg,
-      message   TYPE bapi_msg,
+      message   TYPE string,
       type      TYPE symsgty,
       user_name TYPE syuname,
       date      TYPE xsddate_d,

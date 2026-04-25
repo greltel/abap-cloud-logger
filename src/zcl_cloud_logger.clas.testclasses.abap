@@ -32,6 +32,8 @@ CLASS ltc_external_methods DEFINITION FINAL
 METHODS get_instance_omitted_params    FOR TESTING RAISING cx_static_check.
 METHODS get_instance_conflict_db_save  FOR TESTING RAISING cx_static_check.
 METHODS get_instance_conflict_expiry   FOR TESTING RAISING cx_static_check.
+METHODS long_string_not_truncated  FOR TESTING RAISING cx_static_check.
+METHODS long_exception_not_trunc   FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -570,6 +572,60 @@ ENDMETHOD.
       CATCH zcx_cloud_logger_error.
         " expected
     ENDTRY.
+  ENDMETHOD.
+
+  METHOD long_string_not_truncated.
+
+  DATA(long_text) = REPEAT( val = `x` occ = 500 ).
+
+  mo_log->log_string_add( long_text ).
+
+  " 1. Internal log πρέπει να έχει ολόκληρο το text
+  DATA(messages) = mo_log->get_messages( ).
+  READ TABLE messages INTO DATA(msg) INDEX 1.
+
+  cl_abap_unit_assert=>assert_equals(
+    act = strlen( msg-message )
+    exp = 500
+    msg = 'Full text should be preserved in internal log' ).
+
+  " 2. BAPIRET2 export πρέπει να έχει ολόκληρο το text
+  DATA(bapiret2) = mo_log->get_messages_as_bapiret2( ).
+  READ TABLE bapiret2 INTO DATA(line) INDEX 1.
+
+  cl_abap_unit_assert=>assert_equals(
+    act = strlen( line-message )
+    exp = 220   " το bapiret2-message είναι bapi_msg = 220 chars max
+    msg = 'BAPIRET2 message should hold up to 220 chars (its native limit)' ).
+
+  " 3. Flat export πρέπει να εμφανίζει το πλήρες text
+  DATA(flat) = mo_log->get_messages_flat( ).
+  READ TABLE flat INTO DATA(flat_line) INDEX 1.
+
+  cl_abap_unit_assert=>assert_char_cp(
+    act = flat_line
+    exp = |*{ REPEAT( val = `x` occ = 100 ) }*|
+    msg = 'Flat message should contain at least 100 of the x characters' ).
+
+ENDMETHOD.
+
+  METHOD long_exception_not_trunc.
+    TRY.
+        RAISE EXCEPTION NEW cx_sy_zerodivide( ).
+      CATCH cx_root INTO DATA(caught).
+        mo_log->log_exception_add( exception = caught
+                                   severity  = 'E' ).
+    ENDTRY.
+
+    DATA(messages) = mo_log->get_messages( ).
+    READ TABLE messages INTO DATA(msg) INDEX 1.
+
+    cl_abap_unit_assert=>assert_not_initial( act = msg-message
+                                             msg = 'Exception text should be stored in internal log' ).
+
+    cl_abap_unit_assert=>assert_char_cp( exp = '*divi*'
+                                         act = msg-message
+                                         msg = 'Exception text should mention division (full text not truncated)' ).
   ENDMETHOD.
 
 ENDCLASS.

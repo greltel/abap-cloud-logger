@@ -95,104 +95,100 @@ public section.
       value(LOGGER_INSTANCE) type ref to ZIF_CLOUD_LOGGER .
   PROTECTED SECTION.
   PRIVATE SECTION.
+    TYPES severity_filter_range TYPE RANGE OF symsgty.
 
-    TYPES:
-      severity_filter_range TYPE RANGE OF symsgty .
+    CLASS-DATA logger_instances TYPE logger_instances_type.
 
-    CLASS-DATA logger_instances TYPE logger_instances_type .
-    DATA log_handle TYPE REF TO if_bali_log .
-    DATA header TYPE REF TO if_bali_header_setter .
-    DATA emergency_log TYPE REF TO if_xco_cp_bal_log .
-    DATA log_messages TYPE log_messages_type .
-    DATA db_save TYPE abap_boolean .
-    DATA object TYPE cl_bali_header_setter=>ty_object .
-    DATA subobject TYPE cl_bali_header_setter=>ty_subobject .
-    DATA ext_number TYPE cl_bali_header_setter=>ty_external_id .
-    DATA expiry_date TYPE xsddate_d .
-    DATA enable_emergency_log TYPE abap_boolean .
-    DATA timer_start TYPE timestampl.
-    DATA context TYPE string.
+    DATA log_handle           TYPE REF TO if_bali_log.
+    DATA header               TYPE REF TO if_bali_header_setter.
+    DATA emergency_log        TYPE REF TO if_xco_cp_bal_log.
+    DATA log_messages         TYPE log_messages_type.
+    DATA db_save              TYPE abap_boolean.
+    DATA object               TYPE cl_bali_header_setter=>ty_object.
+    DATA subobject            TYPE cl_bali_header_setter=>ty_subobject.
+    DATA ext_number           TYPE cl_bali_header_setter=>ty_external_id.
+    DATA expiry_date          TYPE xsddate_d.
+    DATA enable_emergency_log TYPE abap_boolean.
+    DATA timer_start          TYPE timestampl.
+    DATA context              TYPE string.
 
-    "! <p class="shorttext synchronized" lang="en">CONSTRUCTOR</p>
+    "! <p class="shorttext synchronized">CONSTRUCTOR</p>
     "!
-    "! @parameter object      | <p class="shorttext synchronized" lang="en">IV_OBJECT</p>
-    "! @parameter subobject   | <p class="shorttext synchronized" lang="en">IV_SUBOBJECT</p>
-    "! @parameter ext_number  | <p class="shorttext synchronized" lang="en">IV_EXT_NUMBER</p>
-    "! @parameter db_save     | <p class="shorttext synchronized" lang="en">IV_DB_SAVE</p>
-    "! @parameter expiry_date | <p class="shorttext synchronized" lang="en">Application Log: Expiration Date</p>
+    "! @parameter object      | <p class="shorttext synchronized">IV_OBJECT</p>
+    "! @parameter subobject   | <p class="shorttext synchronized">IV_SUBOBJECT</p>
+    "! @parameter ext_number  | <p class="shorttext synchronized">IV_EXT_NUMBER</p>
+    "! @parameter db_save     | <p class="shorttext synchronized">IV_DB_SAVE</p>
+    "! @parameter expiry_date | <p class="shorttext synchronized">Application Log: Expiration Date</p>
     METHODS constructor
-      IMPORTING
-        !enable_emergency_log TYPE abap_boolean DEFAULT abap_false
-        !object               TYPE cl_bali_header_setter=>ty_object OPTIONAL
-        !subobject            TYPE cl_bali_header_setter=>ty_subobject OPTIONAL
-        !ext_number           TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
-        !db_save              TYPE abap_boolean DEFAULT abap_true
-        !expiry_date          TYPE xsddate_d OPTIONAL .
-    "! <p class="shorttext synchronized" lang="en">Add Message to Internal Log</p>
+      IMPORTING enable_emergency_log TYPE abap_boolean                          DEFAULT abap_false
+                !object              TYPE cl_bali_header_setter=>ty_object      OPTIONAL
+                subobject            TYPE cl_bali_header_setter=>ty_subobject   OPTIONAL
+                ext_number           TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
+                db_save              TYPE abap_boolean                          DEFAULT abap_true
+                expiry_date          TYPE xsddate_d                             OPTIONAL.
+
+    "! <p class="shorttext synchronized">Add Message to Internal Log</p>
     "!
-    "! @parameter symsg | <p class="shorttext synchronized" lang="en">IV_MSGV3</p>
-    "! @parameter item  | <p class="shorttext synchronized" lang="en">Application Log Item Data (e.g. Message; for Writing)</p>
+    "! @parameter symsg | <p class="shorttext synchronized">IV_MSGV3</p>
+    "! @parameter item  | <p class="shorttext synchronized">Application Log Item Data (e.g. Message; for Writing)</p>
     METHODS add_message_internal_log
-      IMPORTING
-        !symsg TYPE symsg OPTIONAL
-        !item  TYPE REF TO if_bali_item_setter OPTIONAL .
-    "! <p class="shorttext synchronized" lang="en">Get Long Text from Message</p>
+      IMPORTING symsg     TYPE symsg                      OPTIONAL
+                item      TYPE REF TO if_bali_item_setter OPTIONAL
+                full_text TYPE string                     OPTIONAL.
+
+    "! <p class="shorttext synchronized">Get Long Text from Message</p>
     "!
-    "! @parameter symsg     | <p class="shorttext synchronized" lang="en">IV_MSGV4</p>
-    "! @parameter long_text | <p class="shorttext synchronized" lang="en">RE_LONG_TEXT</p>
+    "! @parameter symsg     | <p class="shorttext synchronized">IV_MSGV4</p>
+    "! @parameter long_text | <p class="shorttext synchronized">RE_LONG_TEXT</p>
     CLASS-METHODS get_long_text_from_message
-      IMPORTING
-        !symsg           TYPE symsg
-      RETURNING
-        VALUE(long_text) TYPE bapiret2-message .
-    "! <p class="shorttext synchronized" lang="en">Get String from Message</p>
+      IMPORTING symsg            TYPE symsg
+      RETURNING VALUE(long_text) TYPE bapiret2-message.
+
+    "! <p class="shorttext synchronized">Get String from Message</p>
     "!
-    "! @parameter message | <p class="shorttext synchronized" lang="en">Structure of message variables</p>
+    "! @parameter message | <p class="shorttext synchronized">Structure of message variables</p>
     CLASS-METHODS get_string_from_message
-      IMPORTING
-        !message      TYPE symsg
-      RETURNING
-        VALUE(result) TYPE flat_message .
-    "! <p class="shorttext synchronized" lang="en">Create Emergency Log</p>
-    METHODS create_emergency_log .
-    "! <p class="shorttext synchronized" lang="en">Create Header Object</p>
+      IMPORTING !message      TYPE symsg
+      RETURNING VALUE(result) TYPE flat_message.
+
+    "! <p class="shorttext synchronized">Create Emergency Log</p>
+    METHODS create_emergency_log.
+
+    "! <p class="shorttext synchronized">Create Header Object</p>
     "!
-    "! @parameter header | <p class="shorttext synchronized" lang="en">Application Log Header Data (for Writing)</p>
+    "! @parameter header | <p class="shorttext synchronized">Application Log Header Data (for Writing)</p>
     METHODS create_header
-      RETURNING
-        VALUE(header) TYPE REF TO if_bali_header_setter .
-    "! <p class="shorttext synchronized" lang="en">Get Severity Level of Message Type</p>
+      RETURNING VALUE(header) TYPE REF TO if_bali_header_setter.
+
+    "! <p class="shorttext synchronized">Get Severity Level of Message Type</p>
     "!
-    "! @parameter msgty | <p class="shorttext synchronized" lang="en">Message Type</p>
+    "! @parameter msgty | <p class="shorttext synchronized">Message Type</p>
     METHODS get_severity_filter
-      IMPORTING
-        !msgty        TYPE symsgty
-      RETURNING
-        VALUE(filter) TYPE zcl_cloud_logger=>severity_filter_range .
+      IMPORTING msgty         TYPE symsgty
+      RETURNING VALUE(filter) TYPE zcl_cloud_logger=>severity_filter_range.
 
 ENDCLASS.
 
 
 
 CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
-
-
   METHOD add_message_internal_log.
+    DATA(message_text) = COND string(
+      WHEN full_text IS SUPPLIED AND full_text IS NOT INITIAL
+      THEN full_text
+      ELSE CONV string( get_long_text_from_message( symsg ) ) ).
 
-    INSERT VALUE #( item         = item
-                    symsg        = symsg
-                    message      = get_long_text_from_message( symsg )
-                    type         = symsg-msgty
-                    user_name    = cl_abap_context_info=>get_user_alias( )
-                    date         = cl_abap_context_info=>get_system_date( )
-                    time         = cl_abap_context_info=>get_system_time( ) ) INTO TABLE log_messages.
+    INSERT VALUE #( item      = item
+                    symsg     = symsg
+                    message   = message_text
+                    type      = symsg-msgty
+                    user_name = cl_abap_context_info=>get_user_alias( )
+                    date      = cl_abap_context_info=>get_system_date( )
+                    time      = cl_abap_context_info=>get_system_time( ) ) INTO TABLE log_messages.
 
-    IF emergency_log IS BOUND AND enable_emergency_log EQ abap_true.
-
+    IF emergency_log IS BOUND AND enable_emergency_log = abap_true.
       emergency_log->add_message( is_symsg = symsg ).
-
     ENDIF.
-
   ENDMETHOD.
 
 
@@ -334,22 +330,13 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~get_messages_flat.
-
-    RETURN VALUE #( FOR message IN log_messages
-                   ( get_string_from_message( message = VALUE #( msgty = message-symsg-msgty
-                                                                 msgid = message-symsg-msgid
-                                                                 msgno = message-symsg-msgno
-                                                                 msgv1 = message-symsg-msgv1
-                                                                 msgv2 = message-symsg-msgv2
-                                                                 msgv3 = message-symsg-msgv3
-                                                                 msgv4 = message-symsg-msgv4
-                                                                  )
-                                             )
-                    )
-                   ).
-
+    RETURN VALUE #( FOR msg IN log_messages
+                    ( COND
+                      flat_message(
+                   WHEN msg-symsg-msgid IS INITIAL
+                   THEN |{ msg-symsg-msgty } - { msg-message }|
+                   ELSE get_string_from_message( msg-symsg ) ) ) ).
   ENDMETHOD.
 
 
@@ -438,7 +425,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     CHECK log_handle IS BOUND.
 
     TRY.
-        RETURN xsdbool( log_handle->get_all_items( ) IS NOT INITIAL ).
+        RETURN xsdbool( get_message_count( ) > 0 ).
       CATCH cx_bali_runtime INTO DATA(exception).
     ENDTRY.
 
@@ -461,21 +448,19 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~log_exception_add.
-
     CHECK exception IS BOUND AND log_handle IS BOUND.
 
     TRY.
 
-        DATA(item) =  cl_bali_exception_setter=>create( severity  = severity
-                                                        exception = exception ).
+        DATA(item) = cl_bali_exception_setter=>create( severity  = severity
+                                                       exception = exception ).
 
         log_handle->add_item( item ).
 
-        add_message_internal_log( symsg =  VALUE #( msgty = severity
-                                                        msgv1 = CONV #( exception->get_text( ) ) )
-                                      item  = item   ).
+        add_message_internal_log( symsg     = VALUE #( msgty = severity )
+                                  item      = item
+                                  full_text = exception->get_text( ) ).
 
         logger = me.
 
@@ -483,7 +468,6 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
                                                     previous = exception_local ).
     ENDTRY.
-
   ENDMETHOD.
 
 
@@ -532,18 +516,18 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
     TRY.
 
-        DATA(final_string) = COND #( WHEN context IS NOT INITIAL
-                                     THEN |[{ context }] { string }|
-                                     ELSE string ).
+        DATA(final_string) = COND string( WHEN context IS NOT INITIAL
+                                          THEN |[{ context }] { string }|
+                                          ELSE string ).
 
         DATA(item) = cl_bali_free_text_setter=>create( severity = msgty
                                                        text     = CONV #( final_string ) ).
 
         log_handle->add_item( item ).
 
-        add_message_internal_log( symsg = VALUE #( msgty = msgty
-                                                   msgv1 = CONV #( final_string ) )
-                                  item  = item ).
+        add_message_internal_log( symsg     = VALUE #( msgty = msgty )
+                                  item      = item
+                                  full_text = final_string ).
 
         logger = me.
 
@@ -583,18 +567,16 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~merge_logs.
-
-    "Add to Internal Log
-    INSERT LINES OF external_log->get_messages( ) INTO TABLE log_messages.
-
-    "Add to Handle
+    " Add to Handle
     TRY.
         log_handle->add_all_items_from_other_log( external_log->get_log_handle( ) ).
-      CATCH cx_bali_runtime INTO DATA(exception).
-    ENDTRY.
 
+        " Add to Internal Log
+        INSERT LINES OF external_log->get_messages( ) INTO TABLE log_messages.
+
+      CATCH cx_bali_runtime INTO DATA(exception). " TODO: variable is assigned but never used (ABAP cleaner)
+    ENDTRY.
   ENDMETHOD.
 
   METHOD zif_cloud_logger~reset_appl_log.
@@ -699,26 +681,23 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD create_emergency_log.
+    CHECK enable_emergency_log = abap_true.
 
-    CHECK enable_emergency_log EQ abap_true.
-
-    ext_number = COND #( WHEN ext_number IS INITIAL
-                             THEN  xco_cp=>uuid( )->as( xco_cp_uuid=>format->c36 )->value
-                             ELSE ext_number ).
+    DATA(emergency_ext_number) = COND cl_bali_header_setter=>ty_external_id(
+      WHEN ext_number IS INITIAL
+      THEN xco_cp=>uuid( )->as( xco_cp_uuid=>format->c36 )->value
+      ELSE ext_number ).
 
     TRY.
-
         emergency_log = xco_cp_bal=>for->database( )->log->create( iv_object      = object
                                                                    iv_subobject   = subobject
-                                                                   iv_external_id = ext_number ).
+                                                                   iv_external_id = emergency_ext_number ).
 
       CATCH cx_root INTO DATA(xco_error).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_emergency_log
                                                     previous = xco_error ).
     ENDTRY.
-
   ENDMETHOD.
 
 
@@ -767,7 +746,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
       CATCH cx_root INTO DATA(error).
         log_string_add( string = |Error serializing data to JSON: { error->get_text( ) }|
-                            msgty  = 'E' ).
+                        msgty  = c_message_type-error ).
     ENDTRY.
 
     logger = me.
@@ -824,7 +803,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         DATA(diff) = cl_abap_tstmp=>subtract( tstmp1 = now
                                               tstmp2 = timer_start ).
 
-        log_string_add( string = |{ TEXT-003 } { text } { TEXT-004 } { diff } { TEXT-005 }|
+        log_string_add( string = |{ TEXT-003 } { text } { TEXT-004 } { diff DECIMALS = 3 } { TEXT-005 }|
                             msgty  = zif_cloud_logger=>c_message_type-information ).
 
         CLEAR timer_start.

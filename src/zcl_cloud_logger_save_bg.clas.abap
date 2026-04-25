@@ -14,9 +14,9 @@ CLASS zcl_cloud_logger_save_bg DEFINITION
         it_messages    TYPE ZIF_CLOUD_LOGGER=>LOG_MESSAGES.
 
   PRIVATE SECTION.
-    DATA: mv_object      TYPE balobj_d,
-          mv_subobject   TYPE balsubobj,
-          mv_ext_number  TYPE bal_s_log-extnumber,
+    DATA: mv_object      TYPE cl_bali_header_setter=>ty_object,
+          mv_subobject   TYPE cl_bali_header_setter=>ty_subobject,
+          mv_ext_number  TYPE cl_bali_header_setter=>ty_external_id,
           mv_expiry_date TYPE d,
           mt_messages    TYPE ZIF_CLOUD_LOGGER=>LOG_MESSAGES.
 
