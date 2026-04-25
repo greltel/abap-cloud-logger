@@ -1,55 +1,64 @@
-class ZCX_CLOUD_LOGGER_ERROR definition
-  public
-  inheriting from CX_NO_CHECK
-  final
-  create public .
+CLASS zcx_cloud_logger_error DEFINITION
+  PUBLIC
+  INHERITING FROM cx_no_check
+  FINAL
+  CREATE PUBLIC .
 
-public section.
+  PUBLIC SECTION.
 
-  interfaces IF_T100_MESSAGE .
-  interfaces IF_T100_DYN_MSG .
+    INTERFACES if_t100_message .
+    INTERFACES if_t100_dyn_msg .
 
-  constants:
-    begin of ERROR_RELEASE ##NEEDED,
-      msgid type symsgid value 'Z_CLOUD_LOGGER',
-      msgno type symsgno value '002',
-      attr1 type scx_attrname value '',
-      attr2 type scx_attrname value '',
-      attr3 type scx_attrname value '',
-      attr4 type scx_attrname value '',
-    end of ERROR_RELEASE .
-  constants:
-    begin of ERROR_IN_CREATION ##NEEDED,
-      msgid type symsgid value 'Z_CLOUD_LOGGER',
-      msgno type symsgno value '003',
-      attr1 type scx_attrname value '',
-      attr2 type scx_attrname value '',
-      attr3 type scx_attrname value '',
-      attr4 type scx_attrname value '',
-    end of ERROR_IN_CREATION .
-  constants:
-    begin of ERROR_IN_LOGGING ##NEEDED,
-      msgid type symsgid value 'Z_CLOUD_LOGGER',
-      msgno type symsgno value '004',
-      attr1 type scx_attrname value '',
-      attr2 type scx_attrname value '',
-      attr3 type scx_attrname value '',
-      attr4 type scx_attrname value '',
-    end of ERROR_IN_LOGGING .
-  constants:
-    begin of ERROR_IN_EMERGENCY_LOG ##NEEDED,
-      msgid type symsgid value 'Z_CLOUD_LOGGER',
-      msgno type symsgno value '005',
-      attr1 type scx_attrname value '',
-      attr2 type scx_attrname value '',
-      attr3 type scx_attrname value '',
-      attr4 type scx_attrname value '',
-    end of ERROR_IN_EMERGENCY_LOG .
+    CONSTANTS:
+      BEGIN OF error_release ##NEEDED,
+        msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
+        msgno TYPE symsgno VALUE '002',
+        attr1 TYPE scx_attrname VALUE '',
+        attr2 TYPE scx_attrname VALUE '',
+        attr3 TYPE scx_attrname VALUE '',
+        attr4 TYPE scx_attrname VALUE '',
+      END OF error_release .
+    CONSTANTS:
+      BEGIN OF error_in_creation ##NEEDED,
+        msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
+        msgno TYPE symsgno VALUE '003',
+        attr1 TYPE scx_attrname VALUE '',
+        attr2 TYPE scx_attrname VALUE '',
+        attr3 TYPE scx_attrname VALUE '',
+        attr4 TYPE scx_attrname VALUE '',
+      END OF error_in_creation .
+    CONSTANTS:
+      BEGIN OF error_in_logging ##NEEDED,
+        msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
+        msgno TYPE symsgno VALUE '004',
+        attr1 TYPE scx_attrname VALUE '',
+        attr2 TYPE scx_attrname VALUE '',
+        attr3 TYPE scx_attrname VALUE '',
+        attr4 TYPE scx_attrname VALUE '',
+      END OF error_in_logging .
+    CONSTANTS:
+      BEGIN OF error_in_emergency_log ##NEEDED,
+        msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
+        msgno TYPE symsgno VALUE '005',
+        attr1 TYPE scx_attrname VALUE '',
+        attr2 TYPE scx_attrname VALUE '',
+        attr3 TYPE scx_attrname VALUE '',
+        attr4 TYPE scx_attrname VALUE '',
+      END OF error_in_emergency_log .
+    CONSTANTS:
+      BEGIN OF config_mismatch ##NEEDED,
+        msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
+        msgno TYPE symsgno VALUE '007',
+        attr1 TYPE scx_attrname VALUE '',
+        attr2 TYPE scx_attrname VALUE '',
+        attr3 TYPE scx_attrname VALUE '',
+        attr4 TYPE scx_attrname VALUE '',
+      END OF config_mismatch .
 
-  methods CONSTRUCTOR
-    importing
-      !TEXTID like IF_T100_MESSAGE=>T100KEY optional
-      !PREVIOUS like PREVIOUS optional .
+    METHODS constructor
+      IMPORTING
+        !textid   LIKE if_t100_message=>t100key OPTIONAL
+        !previous LIKE previous OPTIONAL .
   PROTECTED SECTION.
 
   PRIVATE SECTION.
@@ -57,19 +66,18 @@ ENDCLASS.
 
 
 
-CLASS ZCX_CLOUD_LOGGER_ERROR IMPLEMENTATION.
+CLASS zcx_cloud_logger_error IMPLEMENTATION.
 
 
-  method CONSTRUCTOR ##ADT_SUPPRESS_GENERATION.
-CALL METHOD SUPER->CONSTRUCTOR
-EXPORTING
-PREVIOUS = PREVIOUS
-.
-clear me->textid.
-if textid is initial.
-  IF_T100_MESSAGE~T100KEY = IF_T100_MESSAGE=>DEFAULT_TEXTID.
-else.
-  IF_T100_MESSAGE~T100KEY = TEXTID.
-endif.
-  endmethod.
+  METHOD constructor ##ADT_SUPPRESS_GENERATION.
+    CALL METHOD super->constructor
+      EXPORTING
+        previous = previous.
+    CLEAR me->textid.
+    IF textid IS INITIAL.
+      if_t100_message~t100key = if_t100_message=>default_textid.
+    ELSE.
+      if_t100_message~t100key = textid.
+    ENDIF.
+  ENDMETHOD.
 ENDCLASS.

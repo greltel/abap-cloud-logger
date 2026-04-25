@@ -28,6 +28,10 @@ CLASS ltc_external_methods DEFINITION FINAL
     METHODS bapiret2_smart_filtering      FOR TESTING RAISING cx_static_check.
     METHODS test_timer                    FOR TESTING RAISING cx_static_check.
     METHODS test_sticky_context           FOR TESTING RAISING cx_static_check.
+    METHODS get_instance_same_params       FOR TESTING RAISING cx_static_check.
+METHODS get_instance_omitted_params    FOR TESTING RAISING cx_static_check.
+METHODS get_instance_conflict_db_save  FOR TESTING RAISING cx_static_check.
+METHODS get_instance_conflict_expiry   FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -345,7 +349,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     SELECT * FROM i_companycode INTO TABLE @DATA(lt_company_codes) UP TO 10 ROWS.
 
-    mo_log->log_data_add( lt_company_codes )->save_application_log( async = abap_true ).
+    mo_log->log_data_add( lt_company_codes )->save_application_log( ).
     COMMIT WORK.
 
   ENDMETHOD.
@@ -510,6 +514,62 @@ CLASS ltc_external_methods IMPLEMENTATION.
       cl_abap_unit_assert=>fail( 'Context was not cleared properly' ).
     ENDIF.
 
+  ENDMETHOD.
+
+  METHOD get_instance_same_params.
+  " Re-requesting with identical parameters should return the same instance silently
+  TRY.
+      DATA(second) = zcl_cloud_logger=>get_instance(
+        object    = 'Z_CLOUD_LOG_SAMPLE'
+        subobject = 'SETUP'
+        db_save   = abap_true ).
+
+      cl_abap_unit_assert=>assert_equals( act = second exp = mo_log ).
+
+    CATCH zcx_cloud_logger_error.
+      cl_abap_unit_assert=>fail( 'Same parameters should not raise' ).
+  ENDTRY.
+ENDMETHOD.
+
+METHOD get_instance_omitted_params.
+  " Omitting optional parameters should not raise
+  TRY.
+      DATA(second) = zcl_cloud_logger=>get_instance(
+        object    = 'Z_CLOUD_LOG_SAMPLE'
+        subobject = 'SETUP' ).
+
+      cl_abap_unit_assert=>assert_equals( act = second exp = mo_log ).
+
+    CATCH zcx_cloud_logger_error.
+      cl_abap_unit_assert=>fail( 'Omitted parameters should not raise' ).
+  ENDTRY.
+ENDMETHOD.
+
+METHOD get_instance_conflict_db_save.
+  TRY.
+      zcl_cloud_logger=>get_instance(
+        object    = 'Z_CLOUD_LOG_SAMPLE'
+        subobject = 'SETUP'
+        db_save   = abap_false ).
+
+      cl_abap_unit_assert=>fail( 'Conflicting db_save should raise' ).
+
+    CATCH zcx_cloud_logger_error.
+      " expected
+  ENDTRY.
+ENDMETHOD.
+
+  METHOD get_instance_conflict_expiry.
+    TRY.
+        zcl_cloud_logger=>get_instance( object      = 'Z_CLOUD_LOG_SAMPLE'
+                                        subobject   = 'SETUP'
+                                        expiry_date = '20991231' ).
+
+        cl_abap_unit_assert=>fail( 'Conflicting expiry_date should raise' ).
+
+      CATCH zcx_cloud_logger_error.
+        " expected
+    ENDTRY.
   ENDMETHOD.
 
 ENDCLASS.

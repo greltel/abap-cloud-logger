@@ -89,7 +89,7 @@ public section.
       !OBJECT type CL_BALI_HEADER_SETTER=>TY_OBJECT optional
       !SUBOBJECT type CL_BALI_HEADER_SETTER=>TY_SUBOBJECT optional
       !EXT_NUMBER type CL_BALI_HEADER_SETTER=>TY_EXTERNAL_ID optional
-      !DB_SAVE type ABAP_BOOLEAN default ABAP_FALSE
+      !DB_SAVE type ABAP_BOOLEAN default ABAP_TRUE
       !EXPIRY_DATE type XSDDATE_D optional
     returning
       value(LOGGER_INSTANCE) type ref to ZIF_CLOUD_LOGGER .
@@ -169,6 +169,7 @@ public section.
         !msgty        TYPE symsgty
       RETURNING
         VALUE(filter) TYPE zcl_cloud_logger=>severity_filter_range .
+
 ENDCLASS.
 
 
@@ -216,7 +217,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                                                         previous = exception ).
         ENDTRY.
 
-        me->db_save          = COND #( WHEN object IS SUPPLIED AND object IS NOT INITIAL THEN db_save
+        me->db_save          = COND #( WHEN object IS NOT INITIAL THEN db_save
                                        ELSE abap_false ).
 
         create_emergency_log( ).
@@ -228,31 +229,58 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD get_instance.
-
     READ TABLE logger_instances INTO DATA(instance)
-      WITH TABLE KEY log_object    = object
-                     log_subobject = subobject
-                     extnumber     = ext_number.
+         WITH TABLE KEY log_object    = object
+                        log_subobject = subobject
+                        extnumber     = ext_number.
 
-    IF syst-subrc IS INITIAL.
+    IF sy-subrc IS INITIAL.
+
+      " Existing instance found - validate that the caller's request is compatible.
+      " A non-initial parameter that differs from the stored value is a mismatch.
+      " Initial parameters are treated as "no preference" and therefore compatible.
+
+      DATA mismatch TYPE abap_boolean VALUE abap_false.
+
+      IF db_save IS SUPPLIED AND db_save <> instance-db_save.
+        mismatch = abap_true.
+      ENDIF.
+
+      IF     enable_emergency_log IS SUPPLIED
+         AND enable_emergency_log <> instance-enable_emergency_log.
+        mismatch = abap_true.
+      ENDIF.
+
+      IF     expiry_date IS SUPPLIED
+         AND expiry_date IS NOT INITIAL
+         AND expiry_date <> instance-expiry_date.
+        mismatch = abap_true.
+      ENDIF.
+
+      IF mismatch = abap_true.
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>config_mismatch ).
+      ENDIF.
+
       logger_instance = instance-logger.
       RETURN.
     ENDIF.
 
-    logger_instance = NEW zcl_cloud_logger( object                   = object
-                                               subobject             = subobject
-                                               ext_number            = ext_number
-                                               db_save               = db_save
-                                               enable_emergency_log  = enable_emergency_log
-                                               expiry_date           = expiry_date  ).
+    " No existing instance - create a new one
+    logger_instance = NEW zcl_cloud_logger( object               = object
+                                            subobject            = subobject
+                                            ext_number           = ext_number
+                                            db_save              = db_save
+                                            enable_emergency_log = enable_emergency_log
+                                            expiry_date          = expiry_date ).
 
-    INSERT VALUE #( log_object    = object
-                    log_subobject = subobject
-                    extnumber     = ext_number
-                    logger        = logger_instance ) INTO TABLE logger_instances.
-
+    INSERT VALUE #( log_object           = object
+                    log_subobject        = subobject
+                    extnumber            = ext_number
+                    db_save              = db_save
+                    enable_emergency_log = enable_emergency_log
+                    expiry_date          = expiry_date
+                    logger               = logger_instance ) INTO TABLE logger_instances.
   ENDMETHOD.
 
 
@@ -499,23 +527,23 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~log_string_add.
-
     CHECK log_handle IS BOUND.
 
     TRY.
 
-        DATA(final_string) = COND #( WHEN context IS NOT INITIAL THEN |[{ context }] { string }|
-                                        ELSE string ).
+        DATA(final_string) = COND #( WHEN context IS NOT INITIAL
+                                     THEN |[{ context }] { string }|
+                                     ELSE string ).
 
         DATA(item) = cl_bali_free_text_setter=>create( severity = msgty
                                                        text     = CONV #( final_string ) ).
 
         log_handle->add_item( item ).
 
-        add_message_internal_log( symsg = VALUE #( msgty = msgty msgv1 = CONV #( final_string ) )
-                                      item  = item ).
+        add_message_internal_log( symsg = VALUE #( msgty = msgty
+                                                   msgv1 = CONV #( final_string ) )
+                                  item  = item ).
 
         logger = me.
 
@@ -523,8 +551,6 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
                                                     previous = exception ).
     ENDTRY.
-
-
   ENDMETHOD.
 
 
@@ -571,35 +597,38 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~reset_appl_log.
-
     TRY.
 
-        "Delete from Database
-        IF log_handle IS BOUND AND delete_from_db EQ abap_true.
+        " Delete from Database
+        IF log_handle IS BOUND AND delete_from_db = abap_true.
           cl_bali_log_db=>get_instance( )->delete_log( log_handle ).
         ENDIF.
 
-        "Handle Recreation
+        " Handle Recreation
         CLEAR log_handle.
         log_handle = cl_bali_log=>create( ).
 
-        header = COND #( WHEN header IS BOUND THEN header
-                             ELSE create_header( ) ).
+        header = COND #( WHEN header IS BOUND
+                         THEN header
+                         ELSE create_header( ) ).
 
         log_handle->set_header( header ).
 
         CLEAR log_messages.
 
-      CATCH cx_bali_runtime INTO DATA(exception).
-    ENDTRY.
+        CLEAR: timer_start,
+               context.
 
+        CLEAR emergency_log.
+        create_emergency_log( ).
+
+      CATCH cx_bali_runtime INTO DATA(exception). " TODO: variable is assigned but never used (ABAP cleaner)
+    ENDTRY.
   ENDMETHOD.
 
 
   METHOD zif_cloud_logger~save_application_log.
-    CHECK enable_emergency_log <> abap_true.
     CHECK log_handle IS BOUND AND db_save = abap_true.
 
 "TO-BE IMPLEMENTED WITH BGPF
@@ -712,18 +741,18 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~free.
-
     DELETE TABLE logger_instances
-      WITH TABLE KEY log_object    = object
-                     log_subobject = subobject
-                     extnumber     = ext_number.
+           WITH TABLE KEY log_object    = object
+                          log_subobject = subobject
+                          extnumber     = ext_number.
 
     CLEAR: log_handle,
            header,
-           log_messages.
-
+           log_messages,
+           emergency_log,
+           timer_start,
+           context.
   ENDMETHOD.
 
 

@@ -7,9 +7,9 @@ CLASS zcl_cloud_logger_save_bg DEFINITION
 
     METHODS constructor
       IMPORTING
-        iv_object      TYPE balobj_d
-        iv_subobject   TYPE balsubobj
-        iv_ext_number  TYPE bal_s_log-extnumber
+        iv_object      TYPE cl_bali_header_setter=>ty_object
+        iv_subobject   TYPE cl_bali_header_setter=>ty_subobject
+        iv_ext_number  TYPE cl_bali_header_setter=>ty_external_id
         iv_expiry_date TYPE d OPTIONAL
         it_messages    TYPE ZIF_CLOUD_LOGGER=>LOG_MESSAGES.
 
@@ -34,7 +34,6 @@ CLASS ZCL_CLOUD_LOGGER_SAVE_BG IMPLEMENTATION.
     mv_expiry_date = iv_expiry_date.
     mt_messages    = it_messages.
   ENDMETHOD.
-
 
   METHOD if_bgmc_op_single_tx_uncontr~execute.
     TRY.
@@ -66,8 +65,7 @@ CLASS ZCL_CLOUD_LOGGER_SAVE_BG IMPLEMENTATION.
 
         cl_bali_log_db=>get_instance( )->save_log( lo_log ).
 
-      CATCH cx_bali_runtime INTO DATA(lx_bali).
-        RAISE SHORTDUMP lx_bali.
+      CATCH cx_bali_runtime INTO DATA(lx_bali). " TODO: variable is assigned but never used (ABAP cleaner)
     ENDTRY.
   ENDMETHOD.
 ENDCLASS.
