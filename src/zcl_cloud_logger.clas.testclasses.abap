@@ -29,11 +29,12 @@ CLASS ltc_external_methods DEFINITION FINAL
     METHODS test_timer                    FOR TESTING RAISING cx_static_check.
     METHODS test_sticky_context           FOR TESTING RAISING cx_static_check.
     METHODS get_instance_same_params       FOR TESTING RAISING cx_static_check.
-METHODS get_instance_omitted_params    FOR TESTING RAISING cx_static_check.
-METHODS get_instance_conflict_db_save  FOR TESTING RAISING cx_static_check.
-METHODS get_instance_conflict_expiry   FOR TESTING RAISING cx_static_check.
-METHODS long_string_not_truncated  FOR TESTING RAISING cx_static_check.
-METHODS long_exception_not_trunc   FOR TESTING RAISING cx_static_check.
+    METHODS get_instance_omitted_params    FOR TESTING RAISING cx_static_check.
+    METHODS get_instance_conflict_db_save  FOR TESTING RAISING cx_static_check.
+    METHODS get_instance_conflict_expiry   FOR TESTING RAISING cx_static_check.
+    METHODS long_string_not_truncated  FOR TESTING RAISING cx_static_check.
+    METHODS long_exception_not_trunc   FOR TESTING RAISING cx_static_check.
+    METHODS context_applies_to_all_methods FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -142,9 +143,15 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
   METHOD merge_logs.
 
+    DATA lo_second_logger TYPE REF TO zif_cloud_logger.
+
     TRY.
 
-        DATA(lo_second_logger) = zcl_cloud_logger=>get_instance( object = 'Z_CLOUD_LOG_SAMPLE' subobject = 'SETUP' ext_number = '1234' db_save = abap_false ).
+        lo_second_logger = zcl_cloud_logger=>get_instance(
+          object     = 'Z_CLOUD_LOG_SAMPLE'
+          subobject  = 'SETUP'
+          ext_number = '1234'
+          db_save    = abap_false ).
 
         MESSAGE e005(z_cloud_logger) INTO DATA(dummy2).
         lo_second_logger->log_syst_add( ).
@@ -154,11 +161,16 @@ CLASS ltc_external_methods IMPLEMENTATION.
         cl_abap_unit_assert=>assert_equals( exp = 1
                                             act = mo_log->get_message_count( ) ).
 
-
       CATCH zcx_cloud_logger_error INTO DATA(lo_exception).
         DATA(lv_exception_text) = lo_exception->get_text( ).
         cl_abap_unit_assert=>fail( ).
     ENDTRY.
+
+    " Cleanup: free the secondary logger so the static logger_instances
+    " table doesn't accumulate stale entries between test runs.
+    IF lo_second_logger IS BOUND.
+      lo_second_logger->free( ).
+    ENDIF.
 
   ENDMETHOD.
 
@@ -519,47 +531,47 @@ CLASS ltc_external_methods IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_instance_same_params.
-  " Re-requesting with identical parameters should return the same instance silently
-  TRY.
-      DATA(second) = zcl_cloud_logger=>get_instance(
-        object    = 'Z_CLOUD_LOG_SAMPLE'
-        subobject = 'SETUP'
-        db_save   = abap_true ).
+    " Re-requesting with identical parameters should return the same instance silently
+    TRY.
+        DATA(second) = zcl_cloud_logger=>get_instance(
+          object    = 'Z_CLOUD_LOG_SAMPLE'
+          subobject = 'SETUP'
+          db_save   = abap_true ).
 
-      cl_abap_unit_assert=>assert_equals( act = second exp = mo_log ).
+        cl_abap_unit_assert=>assert_equals( act = second exp = mo_log ).
 
-    CATCH zcx_cloud_logger_error.
-      cl_abap_unit_assert=>fail( 'Same parameters should not raise' ).
-  ENDTRY.
-ENDMETHOD.
+      CATCH zcx_cloud_logger_error.
+        cl_abap_unit_assert=>fail( 'Same parameters should not raise' ).
+    ENDTRY.
+  ENDMETHOD.
 
-METHOD get_instance_omitted_params.
-  " Omitting optional parameters should not raise
-  TRY.
-      DATA(second) = zcl_cloud_logger=>get_instance(
-        object    = 'Z_CLOUD_LOG_SAMPLE'
-        subobject = 'SETUP' ).
+  METHOD get_instance_omitted_params.
+    " Omitting optional parameters should not raise
+    TRY.
+        DATA(second) = zcl_cloud_logger=>get_instance(
+          object    = 'Z_CLOUD_LOG_SAMPLE'
+          subobject = 'SETUP' ).
 
-      cl_abap_unit_assert=>assert_equals( act = second exp = mo_log ).
+        cl_abap_unit_assert=>assert_equals( act = second exp = mo_log ).
 
-    CATCH zcx_cloud_logger_error.
-      cl_abap_unit_assert=>fail( 'Omitted parameters should not raise' ).
-  ENDTRY.
-ENDMETHOD.
+      CATCH zcx_cloud_logger_error.
+        cl_abap_unit_assert=>fail( 'Omitted parameters should not raise' ).
+    ENDTRY.
+  ENDMETHOD.
 
-METHOD get_instance_conflict_db_save.
-  TRY.
-      zcl_cloud_logger=>get_instance(
-        object    = 'Z_CLOUD_LOG_SAMPLE'
-        subobject = 'SETUP'
-        db_save   = abap_false ).
+  METHOD get_instance_conflict_db_save.
+    TRY.
+        zcl_cloud_logger=>get_instance(
+          object    = 'Z_CLOUD_LOG_SAMPLE'
+          subobject = 'SETUP'
+          db_save   = abap_false ).
 
-      cl_abap_unit_assert=>fail( 'Conflicting db_save should raise' ).
+        cl_abap_unit_assert=>fail( 'Conflicting db_save should raise' ).
 
-    CATCH zcx_cloud_logger_error.
-      " expected
-  ENDTRY.
-ENDMETHOD.
+      CATCH zcx_cloud_logger_error.
+        " expected
+    ENDTRY.
+  ENDMETHOD.
 
   METHOD get_instance_conflict_expiry.
     TRY.
@@ -576,38 +588,38 @@ ENDMETHOD.
 
   METHOD long_string_not_truncated.
 
-  DATA(long_text) = REPEAT( val = `x` occ = 500 ).
+    DATA(long_text) = repeat( val = `x` occ = 500 ).
 
-  mo_log->log_string_add( long_text ).
+    mo_log->log_string_add( long_text ).
 
-  " 1. Internal log πρέπει να έχει ολόκληρο το text
-  DATA(messages) = mo_log->get_messages( ).
-  READ TABLE messages INTO DATA(msg) INDEX 1.
+    " 1. Internal log πρέπει να έχει ολόκληρο το text
+    DATA(messages) = mo_log->get_messages( ).
+    READ TABLE messages INTO DATA(msg) INDEX 1.
 
-  cl_abap_unit_assert=>assert_equals(
-    act = strlen( msg-message )
-    exp = 500
-    msg = 'Full text should be preserved in internal log' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = strlen( msg-message )
+      exp = 500
+      msg = 'Full text should be preserved in internal log' ).
 
-  " 2. BAPIRET2 export πρέπει να έχει ολόκληρο το text
-  DATA(bapiret2) = mo_log->get_messages_as_bapiret2( ).
-  READ TABLE bapiret2 INTO DATA(line) INDEX 1.
+    " 2. BAPIRET2 export πρέπει να έχει ολόκληρο το text
+    DATA(bapiret2) = mo_log->get_messages_as_bapiret2( ).
+    READ TABLE bapiret2 INTO DATA(line) INDEX 1.
 
-  cl_abap_unit_assert=>assert_equals(
-    act = strlen( line-message )
-    exp = 220   " το bapiret2-message είναι bapi_msg = 220 chars max
-    msg = 'BAPIRET2 message should hold up to 220 chars (its native limit)' ).
+    cl_abap_unit_assert=>assert_equals(
+      act = strlen( line-message )
+      exp = 220   " το bapiret2-message είναι bapi_msg = 220 chars max
+      msg = 'BAPIRET2 message should hold up to 220 chars (its native limit)' ).
 
-  " 3. Flat export πρέπει να εμφανίζει το πλήρες text
-  DATA(flat) = mo_log->get_messages_flat( ).
-  READ TABLE flat INTO DATA(flat_line) INDEX 1.
+    " 3. Flat export πρέπει να εμφανίζει το πλήρες text
+    DATA(flat) = mo_log->get_messages_flat( ).
+    READ TABLE flat INTO DATA(flat_line) INDEX 1.
 
-  cl_abap_unit_assert=>assert_char_cp(
-    act = flat_line
-    exp = |*{ REPEAT( val = `x` occ = 100 ) }*|
-    msg = 'Flat message should contain at least 100 of the x characters' ).
+    cl_abap_unit_assert=>assert_char_cp(
+      act = flat_line
+      exp = |*{ repeat( val = `x` occ = 100 ) }*|
+      msg = 'Flat message should contain at least 100 of the x characters' ).
 
-ENDMETHOD.
+  ENDMETHOD.
 
   METHOD long_exception_not_trunc.
     TRY.
@@ -626,6 +638,48 @@ ENDMETHOD.
     cl_abap_unit_assert=>assert_char_cp( exp = '*divi*'
                                          act = msg-message
                                          msg = 'Exception text should mention division (full text not truncated)' ).
+  ENDMETHOD.
+
+  METHOD context_applies_to_all_methods.
+
+    mo_log->set_context( 'Order 100' ).
+
+    " Free text path
+    mo_log->log_string_add( 'Free text msg' ).
+
+    " Symsg path
+    mo_log->log_message_add( symsg = VALUE #( msgty = 'W'
+                                              msgid = 'CL'
+                                              msgno = '000'
+                                              msgv1 = 'Sym msg' ) ).
+
+    " Exception path
+    TRY.
+        RAISE EXCEPTION NEW cx_sy_zerodivide( ).
+      CATCH cx_root INTO DATA(caught).
+        mo_log->log_exception_add( exception = caught
+                                   severity  = 'E' ).
+    ENDTRY.
+
+    " BAPIRET2 path
+    mo_log->log_bapiret2_structure_add( VALUE #( id     = 'Z_CLOUD_LOGGER'
+                                                 type   = 'I'
+                                                 number = '002'
+                                                 message_v1 = 'BAPI msg' ) ).
+
+    DATA(flat) = mo_log->get_messages_flat( ).
+
+    cl_abap_unit_assert=>assert_equals( exp = 4
+                                        act = lines( flat )
+                                        msg = 'Should have 4 messages' ).
+
+    LOOP AT flat INTO DATA(line).
+      cl_abap_unit_assert=>assert_char_cp(
+        act = line
+        exp = '*[Order 100]*'
+        msg = |Message #{ sy-tabix } should carry the context prefix| ).
+    ENDLOOP.
+
   ENDMETHOD.
 
 ENDCLASS.

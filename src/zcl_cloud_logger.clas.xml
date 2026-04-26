@@ -260,6 +260,11 @@
      <LANGU>E</LANGU>
      <DESCRIPT>Get String from Message</DESCRIPT>
     </SEOCOMPOTX>
+    <SEOCOMPOTX>
+     <CMPNAME>MIRROR_TO_EMERGENCY_LOG</CMPNAME>
+     <LANGU>E</LANGU>
+     <DESCRIPT>Mirror message to emergency log via XCO</DESCRIPT>
+    </SEOCOMPOTX>
    </DESCRIPTIONS>
    <DESCRIPTIONS_SUB>
     <SEOSUBCOTX>

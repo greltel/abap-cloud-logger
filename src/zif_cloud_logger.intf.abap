@@ -14,6 +14,7 @@ INTERFACE zif_cloud_logger
       symsg     TYPE symsg,
       message   TYPE string,
       type      TYPE symsgty,
+      context   TYPE string,
       user_name TYPE syuname,
       date      TYPE xsddate_d,
       time      TYPE xsdtime_t,
