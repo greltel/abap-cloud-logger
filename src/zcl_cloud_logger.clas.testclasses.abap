@@ -35,6 +35,8 @@ CLASS ltc_external_methods DEFINITION FINAL
     METHODS long_string_not_truncated  FOR TESTING RAISING cx_static_check.
     METHODS long_exception_not_trunc   FOR TESTING RAISING cx_static_check.
     METHODS context_applies_to_all_methods FOR TESTING RAISING cx_static_check.
+    METHODS save_with_db_save_disabled FOR TESTING RAISING cx_static_check.
+    METHODS double_start_timer_warns FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -679,6 +681,54 @@ CLASS ltc_external_methods IMPLEMENTATION.
         exp = '*[Order 100]*'
         msg = |Message #{ sy-tabix } should carry the context prefix| ).
     ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD save_with_db_save_disabled.
+
+    " Φτιάχνουμε ξεχωριστή instance με db_save = false
+    DATA(no_save_logger) = zcl_cloud_logger=>get_instance(
+      object     = 'Z_CLOUD_LOG_SAMPLE'
+      subobject  = 'SETUP'
+      ext_number = 'NO_SAVE'
+      db_save    = abap_false ).
+
+    TRY.
+        no_save_logger->save_application_log( ).
+
+        " Πρέπει να υπάρχει ένα warning message στο log
+        DATA(messages) = no_save_logger->get_messages_flat( ).
+
+        cl_abap_unit_assert=>assert_equals( exp = 1
+                                            act = lines( messages )
+                                            msg = 'save_application_log should log a no-op warning' ).
+
+        READ TABLE messages INTO DATA(line) INDEX 1.
+        cl_abap_unit_assert=>assert_char_cp( act = line
+                                             exp = '*db_save is disabled*'
+                                             msg = 'Warning should explain why no save happened' ).
+
+      CLEANUP.
+        no_save_logger->free( ).
+    ENDTRY.
+
+  ENDMETHOD.
+
+  METHOD double_start_timer_warns.
+
+    mo_log->start_timer( ).
+    mo_log->start_timer( ).   " Δεύτερη κλήση χωρίς stop
+
+    DATA(messages) = mo_log->get_messages_flat( ).
+
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = lines( messages )
+                                        msg = 'Second start_timer should log a warning' ).
+
+    READ TABLE messages INTO DATA(line) INDEX 1.
+    cl_abap_unit_assert=>assert_char_cp( act = line
+                                         exp = '*previous timer reset*'
+                                         msg = 'Warning text should be informative' ).
 
   ENDMETHOD.
 

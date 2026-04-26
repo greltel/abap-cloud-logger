@@ -134,7 +134,8 @@ CLASS zcl_cloud_logger DEFINITION
     METHODS add_message_internal_log
       IMPORTING symsg     TYPE symsg                      OPTIONAL
                 item      TYPE REF TO if_bali_item_setter OPTIONAL
-                full_text TYPE string                     OPTIONAL.
+                full_text TYPE string                     OPTIONAL
+                exception TYPE REF TO cx_root             OPTIONAL.
 
     "! <p class="shorttext synchronized">Get Long Text from Message</p>
     "!
@@ -204,9 +205,10 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                     date      = cl_abap_context_info=>get_system_date( )
                     time      = cl_abap_context_info=>get_system_time( ) ) INTO TABLE log_messages.
 
-    IF emergency_log IS BOUND AND enable_emergency_log = abap_true.
-      emergency_log->add_message( is_symsg = symsg ).
-    ENDIF.
+    mirror_to_emergency_log( exception = exception
+                             symsg     = symsg
+                             text      = message_text ).
+
   ENDMETHOD.
 
 
@@ -487,7 +489,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
         add_message_internal_log( symsg     = VALUE #( msgty = severity )
                                   item      = item
-                                  full_text = exception->get_text( ) ).
+                                  full_text = exception->get_text( )
+                                  exception = exception ).
 
         logger = me.
 
@@ -597,14 +600,13 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
 
   METHOD zif_cloud_logger~merge_logs.
-    " Add to Handle
+    CHECK external_log IS BOUND.
+
     TRY.
         log_handle->add_all_items_from_other_log( external_log->get_log_handle( ) ).
-
-        " Add to Internal Log
         INSERT LINES OF external_log->get_messages( ) INTO TABLE log_messages.
 
-      CATCH cx_bali_runtime INTO DATA(exception). " TODO: variable is assigned but never used (ABAP cleaner)
+      CATCH cx_bali_runtime INTO DATA(exception).
     ENDTRY.
   ENDMETHOD.
 
@@ -641,7 +643,13 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
 
   METHOD zif_cloud_logger~save_application_log.
-    CHECK log_handle IS BOUND AND db_save = abap_true.
+    CHECK log_handle IS BOUND.
+
+    IF db_save = abap_false.
+      log_string_add( string = 'save_application_log called but db_save is disabled - no-op'
+                      msgty  = c_message_type-warning ).
+      RETURN.
+    ENDIF.
 
     "TO-BE IMPLEMENTED WITH BGPF
 *    IF async EQ abap_true.
@@ -814,6 +822,11 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
 
   METHOD zif_cloud_logger~start_timer.
+
+    IF timer_start IS NOT INITIAL.
+      log_string_add( string = 'start_timer called twice without stop_timer - previous timer reset'
+                      msgty  = c_message_type-warning ).
+    ENDIF.
 
     GET TIME STAMP FIELD timer_start.
     logger = me.
