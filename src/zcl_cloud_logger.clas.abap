@@ -172,6 +172,8 @@ ENDCLASS.
 
 
 CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
+
+
   METHOD add_message_internal_log.
     DATA(message_text) = COND string(
       WHEN full_text IS SUPPLIED AND full_text IS NOT INITIAL
@@ -224,6 +226,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
+
 
   METHOD get_instance.
     READ TABLE logger_instances INTO DATA(instance)
@@ -329,6 +332,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
 
   ENDMETHOD.
+
 
   METHOD zif_cloud_logger~get_messages_flat.
     RETURN VALUE #( FOR msg IN log_messages
@@ -448,6 +452,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD zif_cloud_logger~log_exception_add.
     CHECK exception IS BOUND AND log_handle IS BOUND.
 
@@ -511,6 +516,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD zif_cloud_logger~log_string_add.
     CHECK log_handle IS BOUND.
 
@@ -567,6 +573,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD zif_cloud_logger~merge_logs.
     " Add to Handle
     TRY.
@@ -578,6 +585,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
       CATCH cx_bali_runtime INTO DATA(exception). " TODO: variable is assigned but never used (ABAP cleaner)
     ENDTRY.
   ENDMETHOD.
+
 
   METHOD zif_cloud_logger~reset_appl_log.
     TRY.
@@ -673,13 +681,15 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                                           low    = search-msgty ) )
                           ELSE VALUE #( ) ).
 
-    LOOP AT log_messages INTO DATA(found_message) WHERE    symsg-msgid    IN search_class
-                                                              AND symsg-msgno IN search_number
-                                                              AND symsg-msgty IN search_type.
+    LOOP AT log_messages ASSIGNING FIELD-SYMBOL(<msg>)
+         WHERE symsg-msgid IN search_class
+           AND symsg-msgno IN search_number
+           AND symsg-msgty IN search_type.
       RETURN abap_true.
     ENDLOOP.
 
   ENDMETHOD.
+
 
   METHOD create_emergency_log.
     CHECK enable_emergency_log = abap_true.
@@ -719,6 +729,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
+
 
   METHOD zif_cloud_logger~free.
     DELETE TABLE logger_instances

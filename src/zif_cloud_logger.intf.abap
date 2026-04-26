@@ -20,9 +20,7 @@ INTERFACE zif_cloud_logger
       item      TYPE REF TO if_bali_item_setter,
     END OF t_log_messages .
   TYPES:
-    log_messages TYPE STANDARD TABLE OF t_log_messages WITH EMPTY KEY
-                    WITH NON-UNIQUE SORTED KEY key_search
-                    COMPONENTS symsg-msgid symsg-msgno symsg-msgty .
+    log_messages TYPE STANDARD TABLE OF t_log_messages WITH EMPTY KEY.
   TYPES:
     BEGIN OF t_logger_instance,
       log_object           TYPE        cl_bali_header_setter=>ty_object,
