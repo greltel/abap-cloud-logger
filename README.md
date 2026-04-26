@@ -233,7 +233,7 @@ logger->clear_context( ).
 
 ## Roadmap
 
- * Log Distribution Channels: Implementation of a `Sender` interface to route logs to external platforms
- * Notifications: Mechanism to automatically trigger notifications (Email or Technical Events) when a **Critical Error** is logged.
  * Async Performance: Implementation of asynchronous saving for high-volume scenarios to minimize runtime impact.
  * Visualization: Development of a RAP OData Service and a Fiori Dashboard for graphical log analysis and monitoring.
+ * Log Distribution Channels: Implementation of a `Sender` interface to route logs to external platforms
+ * Notifications: Mechanism to automatically trigger notifications (Email or Technical Events) when a **Critical Error** is logged.
