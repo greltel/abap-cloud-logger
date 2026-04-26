@@ -83,8 +83,7 @@ logger->log_string_add( string = 'String Add'
 ```abap
 logger->log_bapiret2_table_add( 
     bapiret2_t   = return
-    min_severity = 'E' 
-)->save( )
+    min_severity = 'E' ).
 
 logger->log_bapiret2_structure_add( VALUE #( ) ) .
 ```
@@ -95,7 +94,7 @@ logger->log_bapiret2_structure_add( VALUE #( ) ) .
 SELECT * FROM t001 INTO TABLE @DATA(company_codes) UP TO 10 ROWS.
 
 " Log the whole table as JSON
-lo_logger->log_data_add( company_codes )->save_application_log( ).
+lo_logger->log_data_add( company_codes ).
 ```
 
 ### 7. Get Messages
