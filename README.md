@@ -1,8 +1,8 @@
-# ✅ Status: Release (v1.5.0)
+# ✅ Status: Release (v1.6.0)
 > **Open Source Contribution:** This project is community-driven and **Open Source**! 🚀  
 > If you spot a bug or have an idea for a cool enhancement, your contributions are more than welcome. Feel free to open an **Issue** or submit a **Pull Request**.
 
-![Version](https://img.shields.io/badge/version-1.5.0-blue) 
+![Version](https://img.shields.io/badge/version-1.6.0-blue) 
 [![ABAP Cloud](https://img.shields.io/badge/ABAP-Cloud%20Ready-green)](https://abaplint.app/stats/greltel/abap-cloud-logger/object_classifications)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/greltel/ABAP-Cloud-Logger/blob/main/LICENSE)
 [![ABAP 7.00+](https://img.shields.io/badge/ABAP-7.58%2B-brightgreen)](https://abaplint.app/stats/greltel/abap-cloud-logger/statement_compatibility)
