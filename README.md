@@ -204,6 +204,34 @@ logger->clear_context( ).
 
 ## Changelog
 
+### [1.6.0] - 2026-04-26
+#### Added
+ * Internal error trail — new get_internal_errors() and clear_internal_errors() expose previously swallowed cx_bali_runtime exceptions. Bounded to 100 entries with FIFO     eviction.
+ * Strict singleton validation — get_instance now raises zcx_cloud_logger_error on conflicting config instead of silently returning a mismatched instance.
+ * save_application_log no-op feedback — logs a warning when called with db_save = abap_false.
+ * start_timer double-call detection — warns when called twice without a stop_timer in between.
+ * Sticky context across all logging methods — set_context() now applies to every entry point, not only free-text.
+
+#### Fixed
+
+ * Long message truncation — internal log no longer truncates to 50 characters; full text is preserved.
+ * Emergency log payload loss — dispatcher now picks the correct XCO API per source type (add_exception, add_message, add_text).
+ * Memory leak in create_emergency_log — stopped mutating me->ext_number.
+ * Incomplete cleanup in free() and reset_appl_log() — both now clear timer_start, context, and recreate emergency_log.
+ * merge_logs short dump on unbound input — added IS BOUND check.
+ * Constructor silently overriding db_save — now raises an exception when db_save = abap_true is requested without an object.
+
+#### Performance
+
+ * Removed unused secondary sorted key on log_messages — O(1) inserts, ~30–50% less memory per row.
+ * Simplified get_messages_flat — no more redundant symsg reconstruction.
+ * log_contains_messages no longer copies the full items table.
+
+#### Improved
+
+* Exception handling — read-only methods record exceptions in the trail instead of swallowing them.
+* Test coverage — new tests for truncation, sticky context, config conflicts, timer double-call, db-disabled save, and emergency dispatch.
+   
 ### [1.5.0] - 2026-01-23
 #### Added
  * Added "Sticky Tags" that are automatically appended to all subsequent messages within the instance context. Use set_context and clear_context methods
