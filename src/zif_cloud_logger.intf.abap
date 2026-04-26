@@ -23,6 +23,14 @@ INTERFACE zif_cloud_logger
   TYPES:
     log_messages TYPE STANDARD TABLE OF t_log_messages WITH EMPTY KEY.
   TYPES:
+    BEGIN OF t_internal_error,
+      timestamp  TYPE timestampl,
+      method     TYPE string,
+      error_text TYPE string,
+    END OF t_internal_error.
+  TYPES:
+    internal_errors TYPE STANDARD TABLE OF t_internal_error WITH EMPTY KEY.
+  TYPES:
     BEGIN OF t_logger_instance,
       log_object           TYPE        cl_bali_header_setter=>ty_object,
       log_subobject        TYPE        cl_bali_header_setter=>ty_subobject,
@@ -176,4 +184,10 @@ INTERFACE zif_cloud_logger
   METHODS clear_context
     RETURNING
       VALUE(logger) TYPE REF TO zif_cloud_logger .
+  METHODS get_internal_errors
+    RETURNING
+      VALUE(result) TYPE internal_errors.
+  METHODS clear_internal_errors
+    RETURNING
+      VALUE(logger) TYPE REF TO zif_cloud_logger.
 ENDINTERFACE.

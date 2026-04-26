@@ -265,6 +265,11 @@
      <LANGU>E</LANGU>
      <DESCRIPT>Mirror message to emergency log via XCO</DESCRIPT>
     </SEOCOMPOTX>
+    <SEOCOMPOTX>
+     <CMPNAME>RECORD_INTERNAL_ERROR</CMPNAME>
+     <LANGU>E</LANGU>
+     <DESCRIPT>Record a swallowed exception in the internal error trail</DESCRIPT>
+    </SEOCOMPOTX>
    </DESCRIPTIONS>
    <DESCRIPTIONS_SUB>
     <SEOSUBCOTX>

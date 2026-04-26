@@ -8,6 +8,10 @@ CLASS zcl_cloud_logger DEFINITION
 
     INTERFACES zif_cloud_logger .
 
+    ALIASES clear_internal_errors
+      FOR zif_cloud_logger~clear_internal_errors.
+    ALIASES get_internal_errors
+      FOR zif_cloud_logger~get_internal_errors .
     ALIASES c_default_message_attributes
       FOR zif_cloud_logger~c_default_message_attributes .
     ALIASES c_message_type
@@ -103,6 +107,7 @@ CLASS zcl_cloud_logger DEFINITION
     DATA header               TYPE REF TO if_bali_header_setter.
     DATA emergency_log        TYPE REF TO if_xco_cp_bal_log.
     DATA log_messages         TYPE log_messages_type.
+    DATA internal_errors TYPE zif_cloud_logger=>internal_errors.
     DATA db_save              TYPE abap_boolean.
     DATA object               TYPE cl_bali_header_setter=>ty_object.
     DATA subobject            TYPE cl_bali_header_setter=>ty_subobject.
@@ -183,6 +188,14 @@ CLASS zcl_cloud_logger DEFINITION
                 symsg     TYPE symsg          OPTIONAL
                 text      TYPE string         OPTIONAL.
 
+    "! <p class="shorttext synchronized">Record a swallowed exception in the internal error trail</p>
+    "!
+    "! @parameter method_name | Name of the method where the exception was swallowed
+    "! @parameter exception   | The exception being swallowed
+    METHODS record_internal_error
+      IMPORTING method_name TYPE string
+                exception   TYPE REF TO cx_root.
+
 ENDCLASS.
 
 
@@ -233,8 +246,10 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                                                         previous = exception ).
         ENDTRY.
 
-        me->db_save          = COND #( WHEN object IS NOT INITIAL THEN db_save
-                                       ELSE abap_false ).
+        IF db_save = abap_true AND object IS INITIAL.
+          RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>error_in_creation ).
+        ENDIF.
+        me->db_save = db_save.
 
         create_emergency_log( ).
 
@@ -383,6 +398,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     TRY.
         RETURN lines( log_handle->get_all_items( ) ).
       CATCH cx_bali_runtime INTO DATA(exception).
+        record_internal_error( method_name = 'get_message_count'
+                               exception   = exception ).
     ENDTRY.
 
   ENDMETHOD.
@@ -442,6 +459,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         ENDLOOP.
 
       CATCH cx_bali_runtime INTO DATA(exception).
+        record_internal_error( method_name = 'log_contains_error'
+                               exception   = exception ).
     ENDTRY.
 
   ENDMETHOD.
@@ -455,6 +474,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     TRY.
         RETURN xsdbool( get_message_count( ) > 0 ).
       CATCH cx_bali_runtime INTO DATA(exception).
+        record_internal_error( method_name = 'log_contains_messages'
+                               exception   = exception ).
     ENDTRY.
 
   ENDMETHOD.
@@ -472,6 +493,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         ENDLOOP.
 
       CATCH cx_bali_runtime INTO DATA(exception).
+        record_internal_error( method_name = 'log_contains_warning'
+                               exception   = exception ).
     ENDTRY.
 
   ENDMETHOD.
@@ -508,6 +531,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     TRY.
         RETURN xsdbool( get_message_count( ) IS INITIAL ).
       CATCH cx_bali_runtime INTO DATA(exception).
+        record_internal_error( method_name = 'log_is_empty'
+                               exception   = exception ).
     ENDTRY.
 
   ENDMETHOD.
@@ -607,6 +632,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         INSERT LINES OF external_log->get_messages( ) INTO TABLE log_messages.
 
       CATCH cx_bali_runtime INTO DATA(exception).
+        record_internal_error( method_name = 'merge_logs'
+                               exception   = exception ).
     ENDTRY.
   ENDMETHOD.
 
@@ -637,7 +664,9 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         CLEAR emergency_log.
         create_emergency_log( ).
 
-      CATCH cx_bali_runtime INTO DATA(exception). " TODO: variable is assigned but never used (ABAP cleaner)
+      CATCH cx_bali_runtime INTO DATA(exception).
+        record_internal_error( method_name = 'reset_appl_log'
+                               exception   = exception ).
     ENDTRY.
   ENDMETHOD.
 
@@ -772,7 +801,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
            log_messages,
            emergency_log,
            timer_start,
-           context.
+           context,
+           internal_errors.
   ENDMETHOD.
 
 
@@ -902,5 +932,32 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         " Emergency log is best-effort. Failures here must never break the main flow.
     ENDTRY.
 
+  ENDMETHOD.
+
+
+  METHOD record_internal_error.
+
+    GET TIME STAMP FIELD DATA(now).
+
+    INSERT VALUE #( timestamp  = now
+                    method     = method_name
+                    error_text = exception->get_text( ) ) INTO TABLE internal_errors.
+
+    " Bound the trail to avoid memory growth in long-running sessions
+    IF lines( internal_errors ) > 100.
+      DELETE internal_errors INDEX 1.
+    ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD zif_cloud_logger~get_internal_errors.
+    RETURN internal_errors.
+  ENDMETHOD.
+
+
+  METHOD zif_cloud_logger~clear_internal_errors.
+    CLEAR internal_errors.
+    logger = me.
   ENDMETHOD.
 ENDCLASS.
