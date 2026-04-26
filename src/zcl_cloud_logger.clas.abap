@@ -107,7 +107,7 @@ CLASS zcl_cloud_logger DEFINITION
     DATA header               TYPE REF TO if_bali_header_setter.
     DATA emergency_log        TYPE REF TO if_xco_cp_bal_log.
     DATA log_messages         TYPE log_messages_type.
-    DATA internal_errors TYPE zif_cloud_logger=>internal_errors.
+    DATA internal_errors      TYPE zif_cloud_logger=>internal_errors.
     DATA db_save              TYPE abap_boolean.
     DATA object               TYPE cl_bali_header_setter=>ty_object.
     DATA subobject            TYPE cl_bali_header_setter=>ty_subobject.

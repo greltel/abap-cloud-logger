@@ -32,11 +32,12 @@ CLASS ltc_external_methods DEFINITION FINAL
     METHODS get_instance_omitted_params    FOR TESTING RAISING cx_static_check.
     METHODS get_instance_conflict_db_save  FOR TESTING RAISING cx_static_check.
     METHODS get_instance_conflict_expiry   FOR TESTING RAISING cx_static_check.
-    METHODS long_string_not_truncated  FOR TESTING RAISING cx_static_check.
-    METHODS long_exception_not_trunc   FOR TESTING RAISING cx_static_check.
+    METHODS long_string_not_truncated      FOR TESTING RAISING cx_static_check.
+    METHODS long_exception_not_trunc       FOR TESTING RAISING cx_static_check.
     METHODS context_applies_to_all_methods FOR TESTING RAISING cx_static_check.
-    METHODS save_with_db_save_disabled FOR TESTING RAISING cx_static_check.
-    METHODS double_start_timer_warns FOR TESTING RAISING cx_static_check.
+    METHODS save_with_db_save_disabled     FOR TESTING RAISING cx_static_check.
+    METHODS double_start_timer_warns       FOR TESTING RAISING cx_static_check.
+    METHODS internal_error_trail_works     FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -594,7 +595,6 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     mo_log->log_string_add( long_text ).
 
-    " 1. Internal log πρέπει να έχει ολόκληρο το text
     DATA(messages) = mo_log->get_messages( ).
     READ TABLE messages INTO DATA(msg) INDEX 1.
 
@@ -603,16 +603,14 @@ CLASS ltc_external_methods IMPLEMENTATION.
       exp = 500
       msg = 'Full text should be preserved in internal log' ).
 
-    " 2. BAPIRET2 export πρέπει να έχει ολόκληρο το text
     DATA(bapiret2) = mo_log->get_messages_as_bapiret2( ).
     READ TABLE bapiret2 INTO DATA(line) INDEX 1.
 
     cl_abap_unit_assert=>assert_equals(
       act = strlen( line-message )
-      exp = 220   " το bapiret2-message είναι bapi_msg = 220 chars max
+      exp = 220
       msg = 'BAPIRET2 message should hold up to 220 chars (its native limit)' ).
 
-    " 3. Flat export πρέπει να εμφανίζει το πλήρες text
     DATA(flat) = mo_log->get_messages_flat( ).
     READ TABLE flat INTO DATA(flat_line) INDEX 1.
 
@@ -686,7 +684,6 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
   METHOD save_with_db_save_disabled.
 
-    " Φτιάχνουμε ξεχωριστή instance με db_save = false
     DATA(no_save_logger) = zcl_cloud_logger=>get_instance(
       object     = 'Z_CLOUD_LOG_SAMPLE'
       subobject  = 'SETUP'
@@ -696,7 +693,6 @@ CLASS ltc_external_methods IMPLEMENTATION.
     TRY.
         no_save_logger->save_application_log( ).
 
-        " Πρέπει να υπάρχει ένα warning message στο log
         DATA(messages) = no_save_logger->get_messages_flat( ).
 
         cl_abap_unit_assert=>assert_equals( exp = 1
@@ -717,7 +713,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
   METHOD double_start_timer_warns.
 
     mo_log->start_timer( ).
-    mo_log->start_timer( ).   " Δεύτερη κλήση χωρίς stop
+    mo_log->start_timer( ).
 
     DATA(messages) = mo_log->get_messages_flat( ).
 
@@ -731,5 +727,21 @@ CLASS ltc_external_methods IMPLEMENTATION.
                                          msg = 'Warning text should be informative' ).
 
   ENDMETHOD.
+
+  METHOD internal_error_trail_works.
+
+  DATA(errors) = mo_log->get_internal_errors( ).
+
+  cl_abap_unit_assert=>assert_initial(
+    act = errors
+    msg = 'No internal errors should be recorded under normal flow' ).
+
+  " Verify the type structure exists and is reachable via the interface
+  cl_abap_unit_assert=>assert_equals(
+    act = lines( errors )
+    exp = 0
+    msg = 'Empty trail should have zero entries' ).
+
+ENDMETHOD.
 
 ENDCLASS.
