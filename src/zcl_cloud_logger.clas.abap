@@ -227,6 +227,10 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   METHOD constructor.
 
+    IF db_save = abap_true AND object IS INITIAL.
+      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>error_in_creation ).
+    ENDIF.
+
     TRY.
 
         me->log_handle           = cl_bali_log=>create( ).
@@ -246,9 +250,6 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                                                         previous = exception ).
         ENDTRY.
 
-        IF db_save = abap_true AND object IS INITIAL.
-          RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>error_in_creation ).
-        ENDIF.
         me->db_save = db_save.
 
         create_emergency_log( ).
@@ -353,15 +354,15 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   METHOD zif_cloud_logger~get_messages_as_bapiret2.
 
-    RETURN VALUE #( FOR message IN log_messages
-              ( id         = message-symsg-msgid
-                number     = message-symsg-msgno
-                type       = message-symsg-msgty
-                message_v1 = message-symsg-msgv1
-                message_v2 = message-symsg-msgv2
-                message_v3 = message-symsg-msgv3
-                message_v4 = message-symsg-msgv4
-                message    = message-message ) ).
+    RETURN VALUE #( FOR <msg> IN log_messages
+              ( id         = <msg>-symsg-msgid
+                number     = <msg>-symsg-msgno
+                type       = <msg>-symsg-msgty
+                message_v1 = <msg>-symsg-msgv1
+                message_v2 = <msg>-symsg-msgv2
+                message_v3 = <msg>-symsg-msgv3
+                message_v4 = <msg>-symsg-msgv4
+                message    = <msg>-message ) ).
 
 
   ENDMETHOD.
@@ -629,7 +630,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
     TRY.
         log_handle->add_all_items_from_other_log( external_log->get_log_handle( ) ).
-        INSERT LINES OF external_log->get_messages( ) INTO TABLE log_messages.
+        INSERT LINES OF external_log->get_messages( )        INTO TABLE log_messages.
+        INSERT LINES OF external_log->get_internal_errors( ) INTO TABLE internal_errors.
 
       CATCH cx_bali_runtime INTO DATA(exception).
         record_internal_error( method_name = 'merge_logs'
@@ -718,27 +720,31 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   METHOD zif_cloud_logger~search_message.
 
-    DATA search_class  TYPE RANGE OF symsgid VALUE IS INITIAL.
-    DATA search_number TYPE RANGE OF symsgno VALUE IS INITIAL.
-    DATA search_type   TYPE RANGE OF symsgty VALUE IS INITIAL.
+    IF search IS INITIAL.
+      RETURN xsdbool( log_messages IS NOT INITIAL ).
+    ENDIF.
 
-    search_class = COND #( WHEN search-msgid IS NOT INITIAL
-                           THEN VALUE #( ( sign   = zcl_cloud_logger=>c_select_options-sign_include
-                                          option = zcl_cloud_logger=>c_select_options-option_equal
-                                          low    = search-msgid ) )
-                           ELSE VALUE #( ) ).
+    DATA search_class  TYPE RANGE OF symsgid.
+    DATA search_number TYPE RANGE OF symsgno.
+    DATA search_type   TYPE RANGE OF symsgty.
 
-    search_number = COND #( WHEN search-msgno IS NOT INITIAL
-                            THEN VALUE #( ( sign  = zcl_cloud_logger=>c_select_options-sign_include
-                                            option = zcl_cloud_logger=>c_select_options-option_equal
-                                            low    = search-msgno ) )
-                            ELSE VALUE #( ) ).
+    IF search-msgid IS NOT INITIAL.
+      search_class = VALUE #( ( sign   = c_select_options-sign_include
+                                option = c_select_options-option_equal
+                                low    = search-msgid ) ).
+    ENDIF.
 
-    search_type = COND #( WHEN search-msgty IS NOT INITIAL
-                          THEN VALUE #( ( sign   = zcl_cloud_logger=>c_select_options-sign_include
-                                          option = zcl_cloud_logger=>c_select_options-option_equal
-                                          low    = search-msgty ) )
-                          ELSE VALUE #( ) ).
+    IF search-msgno IS NOT INITIAL.
+      search_number = VALUE #( ( sign   = c_select_options-sign_include
+                                 option = c_select_options-option_equal
+                                 low    = search-msgno ) ).
+    ENDIF.
+
+    IF search-msgty IS NOT INITIAL.
+      search_type = VALUE #( ( sign   = c_select_options-sign_include
+                               option = c_select_options-option_equal
+                               low    = search-msgty ) ).
+    ENDIF.
 
     LOOP AT log_messages ASSIGNING FIELD-SYMBOL(<msg>)
          WHERE symsg-msgid IN search_class
