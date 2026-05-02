@@ -99,23 +99,24 @@ CLASS zcl_cloud_logger DEFINITION
         VALUE(logger_instance) TYPE REF TO zif_cloud_logger .
   PROTECTED SECTION.
   PRIVATE SECTION.
-    TYPES severity_filter_range TYPE RANGE OF symsgty.
 
-    CLASS-DATA logger_instances TYPE logger_instances_type.
+    TYPES:
+      severity_filter_range TYPE RANGE OF symsgty .
 
-    DATA log_handle           TYPE REF TO if_bali_log.
-    DATA header               TYPE REF TO if_bali_header_setter.
-    DATA emergency_log        TYPE REF TO if_xco_cp_bal_log.
-    DATA log_messages         TYPE log_messages_type.
-    DATA internal_errors      TYPE zif_cloud_logger=>internal_errors.
-    DATA db_save              TYPE abap_boolean.
-    DATA object               TYPE cl_bali_header_setter=>ty_object.
-    DATA subobject            TYPE cl_bali_header_setter=>ty_subobject.
-    DATA ext_number           TYPE cl_bali_header_setter=>ty_external_id.
-    DATA expiry_date          TYPE xsddate_d.
-    DATA enable_emergency_log TYPE abap_boolean.
-    DATA timer_start          TYPE timestampl.
-    DATA context              TYPE string.
+    CLASS-DATA logger_instances TYPE logger_instances_type .
+    DATA log_handle TYPE REF TO if_bali_log .
+    DATA header TYPE REF TO if_bali_header_setter .
+    DATA emergency_log TYPE REF TO if_xco_cp_bal_log .
+    DATA log_messages TYPE log_messages_type .
+    DATA internal_errors TYPE zif_cloud_logger=>internal_errors .
+    DATA db_save TYPE abap_boolean .
+    DATA object TYPE cl_bali_header_setter=>ty_object .
+    DATA subobject TYPE cl_bali_header_setter=>ty_subobject .
+    DATA ext_number TYPE cl_bali_header_setter=>ty_external_id .
+    DATA expiry_date TYPE xsddate_d .
+    DATA enable_emergency_log TYPE abap_boolean .
+    DATA timer_start TYPE timestampl .
+    DATA context TYPE string .
 
     "! <p class="shorttext synchronized">CONSTRUCTOR</p>
     "!
@@ -125,54 +126,56 @@ CLASS zcl_cloud_logger DEFINITION
     "! @parameter db_save     | <p class="shorttext synchronized">IV_DB_SAVE</p>
     "! @parameter expiry_date | <p class="shorttext synchronized">Application Log: Expiration Date</p>
     METHODS constructor
-      IMPORTING enable_emergency_log TYPE abap_boolean                          DEFAULT abap_false
-                !object              TYPE cl_bali_header_setter=>ty_object      OPTIONAL
-                subobject            TYPE cl_bali_header_setter=>ty_subobject   OPTIONAL
-                ext_number           TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
-                db_save              TYPE abap_boolean                          DEFAULT abap_true
-                expiry_date          TYPE xsddate_d                             OPTIONAL.
-
+      IMPORTING
+        !enable_emergency_log TYPE abap_boolean DEFAULT abap_false
+        !object               TYPE cl_bali_header_setter=>ty_object OPTIONAL
+        !subobject            TYPE cl_bali_header_setter=>ty_subobject OPTIONAL
+        !ext_number           TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
+        !db_save              TYPE abap_boolean DEFAULT abap_true
+        !expiry_date          TYPE xsddate_d OPTIONAL .
     "! <p class="shorttext synchronized">Add Message to Internal Log</p>
     "!
     "! @parameter symsg | <p class="shorttext synchronized">IV_MSGV3</p>
     "! @parameter item  | <p class="shorttext synchronized">Application Log Item Data (e.g. Message; for Writing)</p>
     METHODS add_message_internal_log
-      IMPORTING symsg     TYPE symsg                      OPTIONAL
-                item      TYPE REF TO if_bali_item_setter OPTIONAL
-                full_text TYPE string                     OPTIONAL
-                exception TYPE REF TO cx_root             OPTIONAL.
-
+      IMPORTING
+        !symsg     TYPE symsg OPTIONAL
+        !item      TYPE REF TO if_bali_item_setter OPTIONAL
+        !full_text TYPE string OPTIONAL
+        !exception TYPE REF TO cx_root OPTIONAL .
     "! <p class="shorttext synchronized">Get Long Text from Message</p>
     "!
     "! @parameter symsg     | <p class="shorttext synchronized">IV_MSGV4</p>
     "! @parameter long_text | <p class="shorttext synchronized">RE_LONG_TEXT</p>
     CLASS-METHODS get_long_text_from_message
-      IMPORTING symsg            TYPE symsg
-      RETURNING VALUE(long_text) TYPE bapiret2-message.
-
+      IMPORTING
+        !symsg           TYPE symsg
+      RETURNING
+        VALUE(long_text) TYPE bapiret2-message .
     "! <p class="shorttext synchronized">Get String from Message</p>
     "!
     "! @parameter message | <p class="shorttext synchronized">Structure of message variables</p>
     CLASS-METHODS get_string_from_message
-      IMPORTING !message      TYPE symsg
-      RETURNING VALUE(result) TYPE flat_message.
-
+      IMPORTING
+        !message      TYPE symsg
+      RETURNING
+        VALUE(result) TYPE flat_message .
     "! <p class="shorttext synchronized">Create Emergency Log</p>
-    METHODS create_emergency_log.
-
+    METHODS create_emergency_log .
     "! <p class="shorttext synchronized">Create Header Object</p>
     "!
     "! @parameter header | <p class="shorttext synchronized">Application Log Header Data (for Writing)</p>
     METHODS create_header
-      RETURNING VALUE(header) TYPE REF TO if_bali_header_setter.
-
+      RETURNING
+        VALUE(header) TYPE REF TO if_bali_header_setter .
     "! <p class="shorttext synchronized">Get Severity Level of Message Type</p>
     "!
     "! @parameter msgty | <p class="shorttext synchronized">Message Type</p>
     METHODS get_severity_filter
-      IMPORTING msgty         TYPE symsgty
-      RETURNING VALUE(filter) TYPE zcl_cloud_logger=>severity_filter_range.
-
+      IMPORTING
+        !msgty        TYPE symsgty
+      RETURNING
+        VALUE(filter) TYPE zcl_cloud_logger=>severity_filter_range .
     "! <p class="shorttext synchronized">Mirror message to emergency log via XCO</p>
     "!
     "! <p>Best-effort dispatch to the appropriate if_xco_cp_bal_log method based
@@ -184,18 +187,37 @@ CLASS zcl_cloud_logger DEFINITION
     "! @parameter symsg     | Optional symsg-based message to mirror via add_message
     "! @parameter text      | Optional free-text string to mirror via add_text
     METHODS mirror_to_emergency_log
-      IMPORTING exception TYPE REF TO cx_root OPTIONAL
-                symsg     TYPE symsg          OPTIONAL
-                text      TYPE string         OPTIONAL.
-
-    "! <p class="shorttext synchronized">Record a swallowed exception in the internal error trail</p>
+      IMPORTING
+        !exception TYPE REF TO cx_root OPTIONAL
+        !symsg     TYPE symsg OPTIONAL
+        !text      TYPE string OPTIONAL .
+    "! <p class="shorttext synchronized">Record a diagnostic entry in the internal error trail</p>
     "!
-    "! @parameter method_name | Name of the method where the exception was swallowed
-    "! @parameter exception   | The exception being swallowed
+    "! <p>Used by read-only methods to surface swallowed exceptions, and by
+    "! self-logging code paths (e.g. save_application_log no-op) to leave a
+    "! trace without polluting the user-facing log. Either an exception or
+    "! a plain error_text must be supplied.</p>
+    "!
+    "! @parameter method_name | Method that produced the diagnostic
+    "! @parameter exception   | Optional exception (its get_text is used)
+    "! @parameter error_text  | Optional plain text (used when no exception is available)
     METHODS record_internal_error
       IMPORTING method_name TYPE string
-                exception   TYPE REF TO cx_root.
-
+                exception   TYPE REF TO cx_root OPTIONAL
+                error_text  TYPE string         OPTIONAL.
+    "! <p class="shorttext synchronized">Best-effort log_string_add for internal/self-logging</p>
+    "!
+    "! <p>Wraps log_string_add so internal callers (start_timer, stop_timer,
+    "! log_data_add fallback) never propagate logging exceptions to the user.
+    "! On failure, the error is recorded in the internal trail.</p>
+    "!
+    "! @parameter string      | Message text
+    "! @parameter msgty       | Severity (defaults to information)
+    "! @parameter caller_name | Method that requested the safe emit (for diagnostics)
+    METHODS safe_log_string
+      IMPORTING string      TYPE string
+                msgty       TYPE symsgty DEFAULT c_message_type-information
+                caller_name TYPE string.
 ENDCLASS.
 
 
@@ -373,7 +395,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     RETURN VALUE #( FOR msg IN log_messages
                     ( COND flat_message(
                         LET base = COND string(
-                            WHEN msg-symsg-msgid IS INITIAL
+                            WHEN msg-symsg-msgid IS INITIAL OR msg-symsg-msgno IS INITIAL
                             THEN |{ msg-message }|
                             ELSE get_string_from_message( msg-symsg ) )
                         IN
@@ -664,7 +686,12 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                context.
 
         CLEAR emergency_log.
-        create_emergency_log( ).
+        TRY.
+            create_emergency_log( ).
+          CATCH zcx_cloud_logger_error INTO DATA(emerg_error).
+            record_internal_error( method_name = 'reset_appl_log (emergency log recreation)'
+                                   exception   = emerg_error ).
+        ENDTRY.
 
       CATCH cx_bali_runtime INTO DATA(exception).
         record_internal_error( method_name = 'reset_appl_log'
@@ -677,8 +704,11 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     CHECK log_handle IS BOUND.
 
     IF db_save = abap_false.
-      log_string_add( string = 'save_application_log called but db_save is disabled - no-op'
-                      msgty  = c_message_type-warning ).
+      " Record the no-op in the internal diagnostic trail. We deliberately do NOT
+      " write to the user-facing log here: callers may invoke save_application_log
+      " in a loop, and a per-call warning would flood log_messages with noise.
+      record_internal_error( method_name = 'save_application_log'
+                             error_text  = 'db_save is disabled - no-op' ).
       RETURN.
     ENDIF.
 
@@ -822,8 +852,9 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                             msgty  = msgty ).
 
       CATCH cx_root INTO DATA(error).
-        log_string_add( string = |Error serializing data to JSON: { error->get_text( ) }|
-                        msgty  = c_message_type-error ).
+        safe_log_string( string      = |Error serializing data to JSON: { error->get_text( ) }|
+                         msgty       = c_message_type-error
+                         caller_name = 'log_data_add (fallback emit)' ).
     ENDTRY.
 
     logger = me.
@@ -860,8 +891,9 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
   METHOD zif_cloud_logger~start_timer.
 
     IF timer_start IS NOT INITIAL.
-      log_string_add( string = 'start_timer called twice without stop_timer - previous timer reset'
-                      msgty  = c_message_type-warning ).
+      safe_log_string( string      = 'start_timer called twice without stop_timer - previous timer reset'
+                       msgty       = c_message_type-warning
+                       caller_name = 'start_timer' ).
     ENDIF.
 
     GET TIME STAMP FIELD timer_start.
@@ -873,8 +905,9 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
   METHOD zif_cloud_logger~stop_timer.
 
     IF timer_start IS INITIAL.
-      log_string_add( string = CONV #( TEXT-002 )
-                          msgty  = zif_cloud_logger=>c_message_type-warning ).
+      safe_log_string( string      = CONV #( TEXT-002 )
+                       msgty       = zif_cloud_logger=>c_message_type-warning
+                       caller_name = 'stop_timer' ).
       logger = me.
       RETURN.
     ENDIF.
@@ -891,8 +924,9 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         CLEAR timer_start.
 
       CATCH cx_parameter_invalid_range cx_parameter_invalid_type.
-        log_string_add( string = CONV #( TEXT-001 )
-                            msgty  = zif_cloud_logger=>c_message_type-error ).
+        safe_log_string( string      = CONV #( TEXT-001 )
+                         msgty       = zif_cloud_logger=>c_message_type-error
+                         caller_name = 'stop_timer (timer arithmetic)' ).
     ENDTRY.
 
     logger = me.
@@ -945,13 +979,17 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
     GET TIME STAMP FIELD DATA(now).
 
+    DATA(text) = COND string( WHEN exception IS BOUND
+                              THEN exception->get_text( )
+                              ELSE error_text ).
+
     INSERT VALUE #( timestamp  = now
                     method     = method_name
-                    error_text = exception->get_text( ) ) INTO TABLE internal_errors.
+                    error_text = text ) INTO TABLE internal_errors.
 
-    " Bound the trail to avoid memory growth in long-running sessions
+    " Bound the trail. Drop in batches for amortized O(1) on overflow.
     IF lines( internal_errors ) > 100.
-      DELETE internal_errors INDEX 1.
+      DELETE internal_errors FROM 1 TO ( lines( internal_errors ) - 100 ).
     ENDIF.
 
   ENDMETHOD.
@@ -965,5 +1003,18 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
   METHOD zif_cloud_logger~clear_internal_errors.
     CLEAR internal_errors.
     logger = me.
+  ENDMETHOD.
+
+
+  METHOD safe_log_string.
+
+    TRY.
+        log_string_add( string = string
+                        msgty  = msgty ).
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        record_internal_error( method_name = caller_name
+                               exception   = error ).
+    ENDTRY.
+
   ENDMETHOD.
 ENDCLASS.

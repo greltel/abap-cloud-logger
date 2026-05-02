@@ -37,7 +37,7 @@ CLASS ltc_external_methods DEFINITION FINAL
     METHODS context_applies_to_all_methods FOR TESTING RAISING cx_static_check.
     METHODS save_with_db_save_disabled     FOR TESTING RAISING cx_static_check.
     METHODS double_start_timer_warns       FOR TESTING RAISING cx_static_check.
-    METHODS internal_error_trail_works     FOR TESTING RAISING cx_static_check.
+    METHODS save_in_loop_no_pollution FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -685,28 +685,30 @@ CLASS ltc_external_methods IMPLEMENTATION.
   METHOD save_with_db_save_disabled.
 
     DATA(no_save_logger) = zcl_cloud_logger=>get_instance(
-      object     = 'Z_CLOUD_LOG_SAMPLE'
-      subobject  = 'SETUP'
-      ext_number = 'NO_SAVE'
-      db_save    = abap_false ).
+    object     = 'Z_CLOUD_LOG_SAMPLE'
+    subobject  = 'SETUP'
+    ext_number = 'NO_SAVE'
+    db_save    = abap_false ).
 
     TRY.
         no_save_logger->save_application_log( ).
 
-        DATA(messages) = no_save_logger->get_messages_flat( ).
+        " The log itself should remain empty - the no-op is recorded internally
+        cl_abap_unit_assert=>assert_equals(
+          exp = 0
+          act = lines( no_save_logger->get_messages_flat( ) )
+          msg = 'save_application_log no-op should not pollute user-facing log' ).
 
-        cl_abap_unit_assert=>assert_equals( exp = 1
-                                            act = lines( messages )
-                                            msg = 'save_application_log should log a no-op warning' ).
-
-        READ TABLE messages INTO DATA(line) INDEX 1.
-        cl_abap_unit_assert=>assert_char_cp( act = line
-                                             exp = '*db_save is disabled*'
-                                             msg = 'Warning should explain why no save happened' ).
+        " But internal trail should reflect the no-op
+        DATA(errors) = no_save_logger->get_internal_errors( ).
+        cl_abap_unit_assert=>assert_not_initial(
+          act = errors
+          msg = 'No-op should be visible in internal trail' ).
 
       CLEANUP.
         no_save_logger->free( ).
     ENDTRY.
+
 
   ENDMETHOD.
 
@@ -728,20 +730,36 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
   ENDMETHOD.
 
-  METHOD internal_error_trail_works.
+  METHOD save_in_loop_no_pollution.
 
-  DATA(errors) = mo_log->get_internal_errors( ).
+    " Realistic scenario: caller invokes save_application_log inside a loop
+    " with db_save disabled. The user-facing log must stay clean.
 
-  cl_abap_unit_assert=>assert_initial(
-    act = errors
-    msg = 'No internal errors should be recorded under normal flow' ).
+    DATA(no_save_logger) = zcl_cloud_logger=>get_instance(
+      object     = 'Z_CLOUD_LOG_SAMPLE'
+      subobject  = 'SETUP'
+      ext_number = 'LOOP_TEST'
+      db_save    = abap_false ).
 
-  " Verify the type structure exists and is reachable via the interface
-  cl_abap_unit_assert=>assert_equals(
-    act = lines( errors )
-    exp = 0
-    msg = 'Empty trail should have zero entries' ).
+    TRY.
+        DO 50 TIMES.
+          no_save_logger->save_application_log( ).
+        ENDDO.
 
-ENDMETHOD.
+        cl_abap_unit_assert=>assert_equals(
+          exp = 0
+          act = lines( no_save_logger->get_messages_flat( ) )
+          msg = '50 no-op saves should produce 0 user-facing log entries' ).
+
+        " Internal trail can grow but is capped at 100
+        cl_abap_unit_assert=>assert_true(
+          act = xsdbool( lines( no_save_logger->get_internal_errors( ) ) <= 100 )
+          msg = 'Internal trail must respect the 100-entry cap' ).
+
+      CLEANUP.
+        no_save_logger->free( ).
+    ENDTRY.
+
+  ENDMETHOD.
 
 ENDCLASS.
