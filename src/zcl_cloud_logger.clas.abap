@@ -95,6 +95,7 @@ CLASS zcl_cloud_logger DEFINITION
         !ext_number            TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
         !db_save               TYPE abap_boolean DEFAULT abap_true
         !expiry_date           TYPE xsddate_d OPTIONAL
+        !trim_limit            TYPE i DEFAULT zif_cloud_logger=>c_default_trim_limit
       RETURNING
         VALUE(logger_instance) TYPE REF TO zif_cloud_logger .
   PROTECTED SECTION.
@@ -104,6 +105,7 @@ CLASS zcl_cloud_logger DEFINITION
       severity_filter_range TYPE RANGE OF symsgty .
 
     CLASS-DATA logger_instances TYPE logger_instances_type .
+    DATA trim_limit TYPE i.
     DATA log_handle TYPE REF TO if_bali_log .
     DATA header TYPE REF TO if_bali_header_setter .
     DATA emergency_log TYPE REF TO if_xco_cp_bal_log .
@@ -132,7 +134,8 @@ CLASS zcl_cloud_logger DEFINITION
         !subobject            TYPE cl_bali_header_setter=>ty_subobject OPTIONAL
         !ext_number           TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
         !db_save              TYPE abap_boolean DEFAULT abap_true
-        !expiry_date          TYPE xsddate_d OPTIONAL .
+        !expiry_date          TYPE xsddate_d OPTIONAL
+        !trim_limit           TYPE i DEFAULT zif_cloud_logger=>c_default_trim_limit.
     "! <p class="shorttext synchronized">Add Message to Internal Log</p>
     "!
     "! @parameter symsg | <p class="shorttext synchronized">IV_MSGV3</p>
@@ -253,6 +256,11 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
       RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>error_in_creation ).
     ENDIF.
 
+    IF trim_limit < 0.
+      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>error_in_creation ).
+    ENDIF.
+    me->trim_limit = trim_limit.
+
     TRY.
 
         me->log_handle           = cl_bali_log=>create( ).
@@ -285,12 +293,13 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
 
   METHOD get_instance.
+
     READ TABLE logger_instances INTO DATA(instance)
          WITH TABLE KEY log_object    = object
                         log_subobject = subobject
                         extnumber     = ext_number.
 
-    IF sy-subrc IS INITIAL.
+    IF syst-subrc IS INITIAL.
 
       " Existing instance found - validate that the caller's request is compatible.
       " A non-initial parameter that differs from the stored value is a mismatch.
@@ -327,7 +336,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                                             ext_number           = ext_number
                                             db_save              = db_save
                                             enable_emergency_log = enable_emergency_log
-                                            expiry_date          = expiry_date ).
+                                            expiry_date          = expiry_date
+                                            trim_limit           = trim_limit ).
 
     INSERT VALUE #( log_object           = object
                     log_subobject        = subobject
@@ -335,6 +345,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                     db_save              = db_save
                     enable_emergency_log = enable_emergency_log
                     expiry_date          = expiry_date
+                    trim_limit           = trim_limit
                     logger               = logger_instance ) INTO TABLE logger_instances.
   ENDMETHOD.
 
@@ -651,9 +662,18 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     CHECK external_log IS BOUND.
 
     TRY.
-        log_handle->add_all_items_from_other_log( external_log->get_log_handle( ) ).
-        INSERT LINES OF external_log->get_messages( )        INTO TABLE log_messages.
-        INSERT LINES OF external_log->get_internal_errors( ) INTO TABLE internal_errors.
+
+        DATA(external_messages) = external_log->get_messages( ).
+        DATA(external_errors)   = external_log->get_internal_errors( ).
+        DATA(external_handle)   = external_log->get_log_handle( ).
+
+        log_handle->add_all_items_from_other_log( external_handle ).
+        INSERT LINES OF external_messages INTO TABLE log_messages.
+        INSERT LINES OF external_errors   INTO TABLE internal_errors.
+
+        IF lines( internal_errors ) > me->trim_limit.
+          DELETE internal_errors FROM 1 TO ( lines( internal_errors ) - me->trim_limit ).
+        ENDIF.
 
       CATCH cx_bali_runtime INTO DATA(exception).
         record_internal_error( method_name = 'merge_logs'
@@ -918,8 +938,9 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         DATA(diff) = cl_abap_tstmp=>subtract( tstmp1 = now
                                               tstmp2 = timer_start ).
 
-        log_string_add( string = |{ TEXT-003 } { text } { TEXT-004 } { diff DECIMALS = 3 } { TEXT-005 }|
-                            msgty  = zif_cloud_logger=>c_message_type-information ).
+        safe_log_string( string      = |{ TEXT-003 } { text } { TEXT-004 } { diff DECIMALS = 3 } { TEXT-005 }|
+                         msgty       = zif_cloud_logger=>c_message_type-information
+                         caller_name = 'stop_timer (result emit)' ).
 
         CLEAR timer_start.
 
@@ -927,6 +948,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         safe_log_string( string      = CONV #( TEXT-001 )
                          msgty       = zif_cloud_logger=>c_message_type-error
                          caller_name = 'stop_timer (timer arithmetic)' ).
+
+        CLEAR timer_start.
     ENDTRY.
 
     logger = me.
@@ -987,9 +1010,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                     method     = method_name
                     error_text = text ) INTO TABLE internal_errors.
 
-    " Bound the trail. Drop in batches for amortized O(1) on overflow.
-    IF lines( internal_errors ) > 100.
-      DELETE internal_errors FROM 1 TO ( lines( internal_errors ) - 100 ).
+    IF lines( internal_errors ) > me->trim_limit.
+      DELETE internal_errors FROM 1 TO ( lines( internal_errors ) - me->trim_limit ).
     ENDIF.
 
   ENDMETHOD.

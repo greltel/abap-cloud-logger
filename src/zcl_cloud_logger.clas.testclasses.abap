@@ -38,6 +38,9 @@ CLASS ltc_external_methods DEFINITION FINAL
     METHODS save_with_db_save_disabled     FOR TESTING RAISING cx_static_check.
     METHODS double_start_timer_warns       FOR TESTING RAISING cx_static_check.
     METHODS save_in_loop_no_pollution FOR TESTING RAISING cx_static_check.
+    METHODS trim_limit_respects_custom FOR TESTING RAISING cx_static_check.
+    METHODS trim_limit_invalid_raises FOR TESTING RAISING cx_static_check.
+
 
 ENDCLASS.
 
@@ -760,6 +763,45 @@ CLASS ltc_external_methods IMPLEMENTATION.
         no_save_logger->free( ).
     ENDTRY.
 
+  ENDMETHOD.
+
+  METHOD trim_limit_respects_custom.
+
+    DATA(small_logger) = zcl_cloud_logger=>get_instance(
+      object     = 'Z_CLOUD_LOG_SAMPLE'
+      subobject  = 'SETUP'
+      ext_number = 'TRIM_5'
+      trim_limit = 5
+      db_save    = abap_false ).
+
+    TRY.
+        DO 10 TIMES.
+          small_logger->save_application_log( ).
+        ENDDO.
+
+        cl_abap_unit_assert=>assert_equals(
+          exp = 5
+          act = lines( small_logger->get_internal_errors( ) )
+          msg = 'Custom trim_limit of 5 should cap the trail at 5 entries' ).
+
+      CLEANUP.
+        small_logger->free( ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD trim_limit_invalid_raises.
+    TRY.
+        zcl_cloud_logger=>get_instance(
+          object     = 'Z_CLOUD_LOG_SAMPLE'
+          subobject  = 'SETUP'
+          ext_number = 'INVALID'
+          trim_limit = -5 ).
+
+        cl_abap_unit_assert=>fail( 'Negative trim_limit should raise' ).
+
+      CATCH zcx_cloud_logger_error.
+        " expected
+    ENDTRY.
   ENDMETHOD.
 
 ENDCLASS.

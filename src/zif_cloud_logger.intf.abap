@@ -1,6 +1,7 @@
 INTERFACE zif_cloud_logger
   PUBLIC .
 
+  CONSTANTS c_default_trim_limit TYPE i VALUE 100.
 
   TYPES:
     bapiret2_messages TYPE STANDARD TABLE OF bapiret2 WITH EMPTY KEY .
@@ -38,6 +39,7 @@ INTERFACE zif_cloud_logger
       db_save              TYPE        abap_boolean,
       enable_emergency_log TYPE        abap_boolean,
       expiry_date          TYPE        xsddate_d,
+      trim_limit           TYPE        i,
       logger               TYPE REF TO zif_cloud_logger,
     END OF t_logger_instance .
   TYPES:
