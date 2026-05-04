@@ -34,7 +34,7 @@ CLASS ZCL_CLOUD_LOGGER_VIEW_ALV IMPLEMENTATION.
         alv->get_columns( )->set_optimize( abap_true ).
         alv->display( ).
 
-      CATCH cx_salv_msg.
+      CATCH cx_root.
     ENDTRY.
 
   ENDMETHOD.

@@ -96,7 +96,7 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
         mo_log->log_exception_add( exception = NEW cx_sy_itab_line_not_found( ) ).
 
-        MESSAGE s003(z_aml) INTO DATA(dummy) ##NEEDED.
+        MESSAGE s003(Z_CLOUD_LOGGER) INTO DATA(dummy) ##NEEDED.
         mo_log->log_syst_add( ).
 
         mo_log->log_string_add( 'Some Freestyle text' ).
