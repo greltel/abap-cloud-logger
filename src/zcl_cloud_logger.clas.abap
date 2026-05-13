@@ -884,6 +884,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   METHOD get_severity_filter.
 
+
+
     RETURN SWITCH #( msgty
                        WHEN zif_cloud_logger~c_message_type-abandon OR zif_cloud_logger~c_message_type-terminate
                        THEN VALUE #( sign   = zcl_cloud_logger=>c_select_options-sign_include

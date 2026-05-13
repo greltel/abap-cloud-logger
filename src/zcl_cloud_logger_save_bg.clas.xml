@@ -10,6 +10,8 @@
     <CLSCCINCL>X</CLSCCINCL>
     <FIXPT>X</FIXPT>
     <UNICODE>5</UNICODE>
+    <RSTAT>K</RSTAT>
+    <MSG_ID>Z_CLOUD_LOGGER</MSG_ID>
    </VSEOCLASS>
   </asx:values>
  </asx:abap>
