@@ -87,7 +87,8 @@ INTERFACE zif_cloud_logger
       !string       TYPE string
       !msgty        TYPE symsgty DEFAULT c_default_message_attributes-type
     RETURNING
-      VALUE(logger) TYPE REF TO zif_cloud_logger .
+      VALUE(logger) TYPE REF TO zif_cloud_logger
+    RAISING zcx_cloud_logger_error.
   METHODS log_message_add
     IMPORTING
       !symsg        TYPE symsg OPTIONAL

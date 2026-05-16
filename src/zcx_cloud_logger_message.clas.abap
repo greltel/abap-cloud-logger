@@ -1,6 +1,6 @@
 class ZCX_CLOUD_LOGGER_MESSAGE definition
   public
-  inheriting from CX_NO_CHECK
+  inheriting from cx_static_check
   final
   create public .
 
@@ -66,25 +66,20 @@ ENDCLASS.
 
 
 CLASS ZCX_CLOUD_LOGGER_MESSAGE IMPLEMENTATION.
-
-
-  method CONSTRUCTOR.
-CALL METHOD SUPER->CONSTRUCTOR
-EXPORTING
-PREVIOUS = PREVIOUS
-.
-me->MSGTY = MSGTY .
-me->MSGV1 = MSGV1 .
-me->MSGV2 = MSGV2 .
-me->MSGV3 = MSGV3 .
-me->MSGV4 = MSGV4 .
-clear me->textid.
-if textid is initial.
-  IF_T100_MESSAGE~T100KEY = IF_T100_MESSAGE=>DEFAULT_TEXTID.
-else.
-  IF_T100_MESSAGE~T100KEY = TEXTID.
-endif.
-  endmethod.
+  METHOD constructor ##ADT_SUPPRESS_GENERATION.
+    super->constructor( previous = previous ).
+    me->msgty = msgty.
+    me->msgv1 = msgv1.
+    me->msgv2 = msgv2.
+    me->msgv3 = msgv3.
+    me->msgv4 = msgv4.
+    CLEAR me->textid.
+    IF textid IS INITIAL.
+      if_t100_message~t100key = if_t100_message=>default_textid.
+    ELSE.
+      if_t100_message~t100key = textid.
+    ENDIF.
+  ENDMETHOD.
 
 
   METHOD NEW_MESSAGE.
