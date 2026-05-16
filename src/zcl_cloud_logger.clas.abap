@@ -291,9 +291,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD get_instance.
-
     READ TABLE logger_instances INTO DATA(instance)
          WITH TABLE KEY log_object    = object
                         log_subobject = subobject
@@ -319,6 +317,10 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
       IF     expiry_date IS SUPPLIED
          AND expiry_date IS NOT INITIAL
          AND expiry_date <> instance-expiry_date.
+        mismatch = abap_true.
+      ENDIF.
+
+      IF trim_limit IS SUPPLIED AND trim_limit <> instance-trim_limit.
         mismatch = abap_true.
       ENDIF.
 
@@ -438,32 +440,31 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~log_bapiret2_structure_add.
+    logger = me.
 
-    CHECK bapiret2 IS NOT INITIAL.
+    IF bapiret2 IS INITIAL OR log_handle IS NOT BOUND.
+      RETURN.
+    ENDIF.
 
     TRY.
         DATA(item) = cl_bali_message_setter=>create_from_bapiret2( bapiret2 ).
 
         log_handle->add_item( item ).
 
-        add_message_internal_log( symsg =  VALUE #( msgid = bapiret2-id
-                                                        msgno = bapiret2-number
-                                                        msgty = bapiret2-type
-                                                        msgv1 = bapiret2-message_v1
-                                                        msgv2 = bapiret2-message_v2
-                                                        msgv3 = bapiret2-message_v3
-                                                        msgv4 = bapiret2-message_v4 )
-                                      item  = item ).
-
-        logger = me.
+        add_message_internal_log( symsg = VALUE #( msgid = bapiret2-id
+                                                   msgno = bapiret2-number
+                                                   msgty = bapiret2-type
+                                                   msgv1 = bapiret2-message_v1
+                                                   msgv2 = bapiret2-message_v2
+                                                   msgv3 = bapiret2-message_v3
+                                                   msgv4 = bapiret2-message_v4 )
+                                  item  = item ).
 
       CATCH cx_bali_runtime INTO DATA(exception).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
                                                     previous = exception ).
     ENDTRY.
-
   ENDMETHOD.
 
 
@@ -533,9 +534,12 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~log_exception_add.
-    CHECK exception IS BOUND AND log_handle IS BOUND.
+    logger = me.
+
+    IF exception IS NOT BOUND OR log_handle IS NOT BOUND.
+      RETURN.
+    ENDIF.
 
     TRY.
 
@@ -548,8 +552,6 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                                   item      = item
                                   full_text = exception->get_text( )
                                   exception = exception ).
-
-        logger = me.
 
       CATCH cx_bali_runtime INTO DATA(exception_local).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
@@ -571,10 +573,12 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~log_message_add.
+    logger = me.
 
-    CHECK log_handle IS BOUND.
+    IF log_handle IS NOT BOUND.
+      RETURN.
+    ENDIF.
 
     TRY.
 
@@ -589,20 +593,20 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         log_handle->add_item( item ).
 
         add_message_internal_log( symsg = symsg
-                                      item  = item ).
-
-        logger = me.
+                                  item  = item ).
 
       CATCH cx_bali_runtime INTO DATA(exception).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
                                                     previous = exception ).
     ENDTRY.
-
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~log_string_add.
-    CHECK log_handle IS BOUND.
+    logger = me.
+
+    IF log_handle IS NOT BOUND.
+      RETURN.
+    ENDIF.
 
     TRY.
 
@@ -619,18 +623,18 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                                   item      = item
                                   full_text = string ).
 
-        logger = me.
-
       CATCH cx_bali_runtime INTO DATA(exception).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
                                                     previous = exception ).
     ENDTRY.
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~log_syst_add.
+    logger = me.
 
-    CHECK log_handle IS BOUND.
+    IF log_handle IS NOT BOUND.
+      RETURN.
+    ENDIF.
 
     TRY.
 
@@ -640,21 +644,18 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         log_handle->add_item( item ).
 
         add_message_internal_log( symsg = VALUE #( msgid = xco_message->value-msgid
-                                                       msgno = xco_message->value-msgno
-                                                       msgty = xco_message->value-msgty
-                                                       msgv1 = xco_message->value-msgv1
-                                                       msgv2 = xco_message->value-msgv2
-                                                       msgv3 = xco_message->value-msgv3
-                                                       msgv4 = xco_message->value-msgv4 )
-                                      item  = item ).
-
-        logger = me.
+                                                   msgno = xco_message->value-msgno
+                                                   msgty = xco_message->value-msgty
+                                                   msgv1 = xco_message->value-msgv1
+                                                   msgv2 = xco_message->value-msgv2
+                                                   msgv3 = xco_message->value-msgv3
+                                                   msgv4 = xco_message->value-msgv4 )
+                                  item  = item ).
 
       CATCH cx_bali_runtime INTO DATA(exception).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
                                                     previous = exception ).
     ENDTRY.
-
   ENDMETHOD.
 
 
@@ -681,7 +682,6 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~reset_appl_log.
     TRY.
 
@@ -704,6 +704,11 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
         CLEAR: timer_start,
                context.
+
+        " internal_errors is intentionally NOT cleared here. reset_appl_log
+        " starts a fresh user-facing log but the diagnostic trail must
+        " survive a reset so swallowed problems from before the reset
+        " remain visible. Only free() wipes the trail (full teardown)
 
         CLEAR emergency_log.
         TRY.
@@ -977,9 +982,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     logger = me.
   ENDMETHOD.
 
-
   METHOD mirror_to_emergency_log.
-
     CHECK emergency_log IS BOUND AND enable_emergency_log = abap_true.
 
     TRY.
@@ -993,10 +996,13 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
           emergency_log->add_text( io_text = xco_cp=>string( text ) ).
         ENDIF.
 
-      CATCH cx_root.
-        " Emergency log is best-effort. Failures here must never break the main flow.
+      CATCH cx_root INTO DATA(mirror_error).
+        " Emergency log is best-effort and must never break the main flow,
+        " but a silent failure used to be invisible. Record it in the
+        " diagnostic trail so a "all mirrors failed" situation is surfaced.
+        record_internal_error( method_name = 'mirror_to_emergency_log'
+                               exception   = mirror_error ).
     ENDTRY.
-
   ENDMETHOD.
 
 

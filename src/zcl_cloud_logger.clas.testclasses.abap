@@ -40,6 +40,9 @@ CLASS ltc_external_methods DEFINITION FINAL
     METHODS save_in_loop_no_pollution FOR TESTING RAISING cx_static_check.
     METHODS trim_limit_respects_custom FOR TESTING RAISING cx_static_check.
     METHODS trim_limit_invalid_raises FOR TESTING RAISING cx_static_check.
+        METHODS chain_initial_bapiret2_safe    FOR TESTING RAISING cx_static_check.
+    METHODS chain_unbound_handle_safe      FOR TESTING RAISING cx_static_check.
+    METHODS get_instance_conflict_trim     FOR TESTING RAISING cx_static_check.
 
 
 ENDCLASS.
@@ -802,6 +805,60 @@ CLASS ltc_external_methods IMPLEMENTATION.
       CATCH zcx_cloud_logger_error.
         " expected
     ENDTRY.
+  ENDMETHOD.
+
+  METHOD chain_initial_bapiret2_safe.
+    " Fix #1: an initial bapiret2 used to make log_bapiret2_structure_add
+    " return an unbound reference, which dumped the next link in the chain.
+    " Now it must be a no-op that still allows chaining.
+
+    DATA(chained) = mo_log->log_bapiret2_structure_add( VALUE #( )
+                       )->log_string_add( 'after no-op' ).
+
+    cl_abap_unit_assert=>assert_bound(
+      act = chained
+      msg = 'Logger reference must stay bound after a no-op bapiret2 call' ).
+
+    cl_abap_unit_assert=>assert_equals(
+      exp = 1
+      act = mo_log->get_message_count( )
+      msg = 'The chained log_string_add should still produce one message' ).
+
+  ENDMETHOD.
+
+  METHOD chain_unbound_handle_safe.
+    " Fix #1 + #2: after free() the log_handle is unbound. The old CHECK-based
+    " early exit returned an unbound reference; a chained call would dump.
+
+    mo_log->free( ).
+
+    DATA(chained) = mo_log->log_string_add( 'one'
+                       )->log_message_add( VALUE #( msgty = 'I'
+                                                    msgid = 'CL'
+                                                    msgno = '000' )
+                       )->log_syst_add( ).
+
+    cl_abap_unit_assert=>assert_bound( act = chained
+                                       msg = 'Logger reference must stay bound even when log_handle is unbound' ).
+  ENDMETHOD.
+
+
+  METHOD get_instance_conflict_trim.
+    " Fix #5: setup created the instance with the default trim_limit (100).
+    " Re-requesting the same instance with a different explicit trim_limit
+    " must raise, mirroring db_save / expiry_date conflict handling.
+
+    TRY.
+        zcl_cloud_logger=>get_instance( object     = 'Z_CLOUD_LOG_SAMPLE'
+                                        subobject  = 'SETUP'
+                                        trim_limit = 50 ).
+
+        cl_abap_unit_assert=>fail( 'Conflicting trim_limit should raise' ).
+
+      CATCH zcx_cloud_logger_error.
+        " expected
+    ENDTRY.
+
   ENDMETHOD.
 
 ENDCLASS.
