@@ -112,7 +112,9 @@ INTERFACE zif_cloud_logger
       !bapiret2_t   TYPE bapiret2_messages
       !min_severity TYPE symsgty OPTIONAL
     RETURNING
-      VALUE(logger) TYPE REF TO zif_cloud_logger .
+      VALUE(logger) TYPE REF TO zif_cloud_logger
+    RAISING
+      zcx_cloud_logger_error.
 
   METHODS log_bapiret2_structure_add
     IMPORTING bapiret2      TYPE bapiret2

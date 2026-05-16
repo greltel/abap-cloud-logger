@@ -297,39 +297,37 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD get_instance.
-    READ TABLE logger_instances INTO DATA(instance)
-         WITH TABLE KEY log_object    = object
-                        log_subobject = subobject
-                        extnumber     = ext_number.
+    TRY.
+        DATA(instance) = logger_instances[ log_object    = object
+                                           log_subobject = subobject
+                                           extnumber     = ext_number ].
 
-    IF syst-subrc IS INITIAL.
+        " Existing instance found - a non-initial parameter that differs
+        " from the stored value is a configuration conflict. Omitted/initial
+        " parameters mean "no preference" and are therefore compatible.
+        DATA(mismatch) = xsdbool(
+             (     db_save              IS SUPPLIED
+               AND db_save              <> instance-db_save )
+          OR (     enable_emergency_log IS SUPPLIED
+               AND enable_emergency_log <> instance-enable_emergency_log )
+          OR (     expiry_date          IS SUPPLIED
+               AND expiry_date          IS NOT INITIAL
+               AND expiry_date          <> instance-expiry_date )
+          OR (     trim_limit           IS SUPPLIED
+               AND trim_limit           <> instance-trim_limit ) ).
 
-      " Existing instance found - validate that the caller's request is compatible.
-      " A non-initial parameter that differs from the stored value is a mismatch.
-      " Initial parameters are treated as "no preference" and therefore compatible.
+        IF mismatch = abap_true.
+          RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>config_mismatch ).
+        ENDIF.
 
-      DATA(mismatch) = xsdbool(
-             (      db_save IS SUPPLIED
-                AND db_save <> instance-db_save )
-          OR (      enable_emergency_log IS SUPPLIED
-                AND enable_emergency_log <> instance-enable_emergency_log )
-          OR (      expiry_date IS SUPPLIED
-                AND expiry_date IS NOT INITIAL
-                AND expiry_date <> instance-expiry_date )
-          OR (      trim_limit IS SUPPLIED
-                AND trim_limit <> instance-trim_limit ) ).
+        logger_instance = instance-logger.
+        RETURN.
 
-      IF mismatch = abap_true.
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>config_mismatch ).
-      ENDIF.
+      CATCH cx_sy_itab_line_not_found.
+        " no existing instance - fall through to creation
+    ENDTRY.
 
-      logger_instance = instance-logger.
-      RETURN.
-    ENDIF.
-
-    " No existing instance - create a new one
     logger_instance = NEW zcl_cloud_logger( object               = object
                                             subobject            = subobject
                                             ext_number           = ext_number
