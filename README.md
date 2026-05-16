@@ -161,7 +161,7 @@ logger->merge_logs( new_logger ).
 ### 13. Reset Log
 
 ```abap
-lo_logger->reset_appl_log( im_delete_from_db = abap_true ).
+lo_logger->reset_appl_log( delete_from_db = abap_true ).
 ```
 
 ### 14. Timer
