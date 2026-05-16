@@ -46,7 +46,8 @@
     <T100>
      <SPRSL>E</SPRSL>
      <ARBGB>Z_CLOUD_LOGGER</ARBGB>
-     <MSGNR>006</MSGNR>
+     <MSGNR>007</MSGNR>
+     <TEXT>Logger instance already exists with a different configuration.</TEXT>
     </T100>
    </T100>
   </asx:values>

@@ -6,7 +6,7 @@ CLASS ltc_external_methods DEFINITION FINAL
 
     DATA mo_log TYPE REF TO zif_cloud_logger.
 
-    METHODS setup.
+    METHODS setup RAISING cx_static_check.
     METHODS teardown.
     METHODS test_instantiation            FOR TESTING RAISING cx_static_check.
     METHODS add_messages                  FOR TESTING RAISING cx_static_check.

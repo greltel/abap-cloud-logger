@@ -164,13 +164,14 @@ CLASS zcl_cloud_logger DEFINITION
       RETURNING VALUE(result) TYPE flat_message.
 
     "! <p class="shorttext synchronized">Create Emergency Log</p>
-    METHODS create_emergency_log.
+    METHODS create_emergency_log RAISING zcx_cloud_logger_error.
 
     "! <p class="shorttext synchronized">Create Header Object</p>
     "!
     "! @parameter header | <p class="shorttext synchronized">Application Log Header Data (for Writing)</p>
     METHODS create_header
-      RETURNING VALUE(header) TYPE REF TO if_bali_header_setter.
+      RETURNING VALUE(header) TYPE REF TO if_bali_header_setter
+      RAISING zcx_cloud_logger_error.
 
     "! <p class="shorttext synchronized">Get Severity Level of Message Type</p>
     "!
@@ -309,26 +310,16 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
       " A non-initial parameter that differs from the stored value is a mismatch.
       " Initial parameters are treated as "no preference" and therefore compatible.
 
-      DATA mismatch TYPE abap_boolean VALUE abap_false.
-
-      IF db_save IS SUPPLIED AND db_save <> instance-db_save.
-        mismatch = abap_true.
-      ENDIF.
-
-      IF     enable_emergency_log IS SUPPLIED
-         AND enable_emergency_log <> instance-enable_emergency_log.
-        mismatch = abap_true.
-      ENDIF.
-
-      IF     expiry_date IS SUPPLIED
-         AND expiry_date IS NOT INITIAL
-         AND expiry_date <> instance-expiry_date.
-        mismatch = abap_true.
-      ENDIF.
-
-      IF trim_limit IS SUPPLIED AND trim_limit <> instance-trim_limit.
-        mismatch = abap_true.
-      ENDIF.
+      DATA(mismatch) = xsdbool(
+             (      db_save IS SUPPLIED
+                AND db_save <> instance-db_save )
+          OR (      enable_emergency_log IS SUPPLIED
+                AND enable_emergency_log <> instance-enable_emergency_log )
+          OR (      expiry_date IS SUPPLIED
+                AND expiry_date IS NOT INITIAL
+                AND expiry_date <> instance-expiry_date )
+          OR (      trim_limit IS SUPPLIED
+                AND trim_limit <> instance-trim_limit ) ).
 
       IF mismatch = abap_true.
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>config_mismatch ).

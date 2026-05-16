@@ -93,27 +93,32 @@ INTERFACE zif_cloud_logger
     IMPORTING
       !symsg        TYPE symsg OPTIONAL
     RETURNING
-      VALUE(logger) TYPE REF TO zif_cloud_logger .
+      VALUE(logger) TYPE REF TO zif_cloud_logger
+    RAISING
+      zcx_cloud_logger_error.
   METHODS log_syst_add
     RETURNING
-      VALUE(logger) TYPE REF TO zif_cloud_logger .
+      VALUE(logger) TYPE REF TO zif_cloud_logger
+    RAISING zcx_cloud_logger_error.
   METHODS log_exception_add
     IMPORTING
       !severity     TYPE symsgty DEFAULT c_default_message_attributes-type
       !exception    TYPE REF TO cx_root
     RETURNING
-      VALUE(logger) TYPE REF TO zif_cloud_logger .
+      VALUE(logger) TYPE REF TO zif_cloud_logger
+    RAISING zcx_cloud_logger_error.
   METHODS log_bapiret2_table_add
     IMPORTING
       !bapiret2_t   TYPE bapiret2_messages
       !min_severity TYPE symsgty OPTIONAL
     RETURNING
       VALUE(logger) TYPE REF TO zif_cloud_logger .
+
   METHODS log_bapiret2_structure_add
-    IMPORTING
-      !bapiret2     TYPE bapiret2
-    RETURNING
-      VALUE(logger) TYPE REF TO zif_cloud_logger .
+    IMPORTING bapiret2      TYPE bapiret2
+    RETURNING VALUE(logger) TYPE REF TO zif_cloud_logger
+    RAISING   zcx_cloud_logger_error.
+
   METHODS log_data_add
     IMPORTING
       !data         TYPE data
@@ -123,7 +128,9 @@ INTERFACE zif_cloud_logger
   METHODS save_application_log
     IMPORTING
       !use_2nd_db_connection      TYPE abap_boolean DEFAULT abap_false
-      !assign_to_current_appl_job TYPE abap_boolean DEFAULT abap_false.
+      !assign_to_current_appl_job TYPE abap_boolean DEFAULT abap_false
+     RAISING
+      zcx_cloud_logger_error.
 *      !ASYNC type ABAP_BOOLEAN default ABAP_FALSE
 *      !ASYNC_NAME type IF_BGMC_PROCESS=>TY_NAME default 'Background Logger Save'
   METHODS get_messages
@@ -149,7 +156,8 @@ INTERFACE zif_cloud_logger
       VALUE(count) TYPE int4 .
   METHODS reset_appl_log
     IMPORTING
-      !delete_from_db TYPE abap_bool DEFAULT abap_true .
+      !delete_from_db TYPE abap_bool DEFAULT abap_true
+    RAISING zcx_cloud_logger_error.
   METHODS log_is_empty
     RETURNING
       VALUE(result) TYPE abap_boolean .

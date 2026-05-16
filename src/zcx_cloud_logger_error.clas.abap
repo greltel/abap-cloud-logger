@@ -1,6 +1,6 @@
 CLASS zcx_cloud_logger_error DEFINITION
   PUBLIC
-  INHERITING FROM cx_no_check
+  INHERITING FROM cx_static_check
   FINAL
   CREATE PUBLIC .
 
@@ -70,9 +70,7 @@ CLASS zcx_cloud_logger_error IMPLEMENTATION.
 
 
   METHOD constructor ##ADT_SUPPRESS_GENERATION.
-    CALL METHOD super->constructor
-      EXPORTING
-        previous = previous.
+    super->constructor( previous = previous ).
     CLEAR me->textid.
     IF textid IS INITIAL.
       if_t100_message~t100key = if_t100_message=>default_textid.
