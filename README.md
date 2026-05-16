@@ -91,7 +91,7 @@ logger->log_bapiret2_structure_add( VALUE #( ) ) .
 ### 6. Advanced Data Logging (JSON)
 
 ```abap
-SELECT * FROM t001 INTO TABLE @DATA(company_codes) UP TO 10 ROWS.
+SELECT * FROM i_companycode INTO TABLE @DATA(company_codes) UP TO 10 ROWS.
 
 " Log the whole table as JSON
 lo_logger->log_data_add( company_codes ).
