@@ -106,6 +106,7 @@ CLASS zcl_cloud_logger DEFINITION
 
     CLASS-DATA logger_instances TYPE logger_instances_type .
     DATA trim_limit TYPE i.
+    DATA user_alias TYPE syuname.
     DATA log_handle TYPE REF TO if_bali_log .
     DATA header TYPE REF TO if_bali_header_setter .
     DATA emergency_log TYPE REF TO if_xco_cp_bal_log .
@@ -221,6 +222,9 @@ CLASS zcl_cloud_logger DEFINITION
       IMPORTING string      TYPE string
                 msgty       TYPE symsgty DEFAULT c_message_type-information
                 caller_name TYPE string.
+
+         "! <p class="shorttext synchronized">Trim the internal trail to the configured limit (FIFO)</p>
+    METHODS trim_internal_errors.
 ENDCLASS.
 
 
@@ -239,7 +243,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                     message   = message_text
                     type      = symsg-msgty
                     context   = me->context
-                    user_name = cl_abap_context_info=>get_user_alias( )
+                    user_name = me->user_alias
                     date      = cl_abap_context_info=>get_system_date( )
                     time      = cl_abap_context_info=>get_system_time( ) ) INTO TABLE log_messages.
 
@@ -260,6 +264,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
       RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>error_in_creation ).
     ENDIF.
     me->trim_limit = trim_limit.
+    me->user_alias  = cl_abap_context_info=>get_user_alias( ).
 
     TRY.
 
@@ -365,11 +370,10 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~get_handle.
+    CHECK log_handle IS BOUND.
 
-    RETURN log_handle->get_handle( ).
-
+    handle = log_handle->get_handle( ).
   ENDMETHOD.
 
 
@@ -426,18 +430,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~get_message_count.
-
-    CHECK log_handle IS BOUND.
-
-    TRY.
-        RETURN lines( log_handle->get_all_items( ) ).
-      CATCH cx_bali_runtime INTO DATA(exception).
-        record_internal_error( method_name = 'get_message_count'
-                               exception   = exception ).
-    ENDTRY.
-
+    count = lines( log_messages ).
   ENDMETHOD.
 
   METHOD zif_cloud_logger~log_bapiret2_structure_add.
@@ -500,19 +494,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~log_contains_messages.
-
-    CLEAR result.
-    CHECK log_handle IS BOUND.
-
-    TRY.
-        RETURN xsdbool( get_message_count( ) > 0 ).
-      CATCH cx_bali_runtime INTO DATA(exception).
-        record_internal_error( method_name = 'log_contains_messages'
-                               exception   = exception ).
-    ENDTRY.
-
+    result = xsdbool( log_messages IS NOT INITIAL ).
   ENDMETHOD.
 
 
@@ -562,14 +545,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   METHOD zif_cloud_logger~log_is_empty.
 
-    CHECK log_handle IS BOUND.
-
-    TRY.
-        RETURN xsdbool( get_message_count( ) IS INITIAL ).
-      CATCH cx_bali_runtime INTO DATA(exception).
-        record_internal_error( method_name = 'log_is_empty'
-                               exception   = exception ).
-    ENDTRY.
+result = xsdbool( log_messages IS INITIAL ).
 
   ENDMETHOD.
 
@@ -658,9 +634,10 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~merge_logs.
-    CHECK external_log IS BOUND.
+    IF external_log IS NOT BOUND OR log_handle IS NOT BOUND.
+      RETURN.
+    ENDIF.
 
     TRY.
 
@@ -672,9 +649,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         INSERT LINES OF external_messages INTO TABLE log_messages.
         INSERT LINES OF external_errors   INTO TABLE internal_errors.
 
-        IF lines( internal_errors ) > me->trim_limit.
-          DELETE internal_errors FROM 1 TO ( lines( internal_errors ) - me->trim_limit ).
-        ENDIF.
+        trim_internal_errors( ).
 
       CATCH cx_bali_runtime INTO DATA(exception).
         record_internal_error( method_name = 'merge_logs'
@@ -963,11 +938,9 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~display.
-
+    CHECK viewer IS BOUND.
     viewer->view( me ).
-
   ENDMETHOD.
 
 
@@ -1018,9 +991,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                     method     = method_name
                     error_text = text ) INTO TABLE internal_errors.
 
-    IF lines( internal_errors ) > me->trim_limit.
-      DELETE internal_errors FROM 1 TO ( lines( internal_errors ) - me->trim_limit ).
-    ENDIF.
+trim_internal_errors( ).
 
   ENDMETHOD.
 
@@ -1045,6 +1016,14 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         record_internal_error( method_name = caller_name
                                exception   = error ).
     ENDTRY.
+
+  ENDMETHOD.
+
+    METHOD trim_internal_errors.
+
+    IF lines( internal_errors ) > me->trim_limit.
+      DELETE internal_errors FROM 1 TO ( lines( internal_errors ) - me->trim_limit ).
+    ENDIF.
 
   ENDMETHOD.
 ENDCLASS.
