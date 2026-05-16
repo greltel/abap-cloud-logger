@@ -378,37 +378,11 @@ CLASS ltc_external_methods IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD empty_log.
-
-    TRY.
-
-        IF mo_log->log_is_empty( ) EQ abap_false.
-          cl_abap_unit_assert=>fail( ).
-        ELSE.
-          cl_abap_unit_assert=>assert_true( abap_true ).
-        ENDIF.
-
-      CATCH zcx_cloud_logger_error INTO DATA(lo_exception).
-        DATA(lv_exception_text) = lo_exception->get_text( ).
-        cl_abap_unit_assert=>fail( ).
-    ENDTRY.
-
+    cl_abap_unit_assert=>assert_true( mo_log->log_is_empty( ) ).
   ENDMETHOD.
 
   METHOD log_contain_messages.
-
-    TRY.
-
-        IF mo_log->log_contains_messages( ) EQ abap_false.
-          cl_abap_unit_assert=>assert_true( abap_true ).
-        ELSE.
-          cl_abap_unit_assert=>fail( ).
-        ENDIF.
-
-      CATCH zcx_cloud_logger_error INTO DATA(lo_exception).
-        DATA(lv_exception_text) = lo_exception->get_text( ).
-        cl_abap_unit_assert=>fail( ).
-    ENDTRY.
-
+    cl_abap_unit_assert=>assert_false( mo_log->log_contains_messages( ) ).
   ENDMETHOD.
 
   METHOD use_same_instance.
@@ -503,11 +477,9 @@ CLASS ltc_external_methods IMPLEMENTATION.
 
     READ TABLE lt_msgs INTO DATA(lv_msg) INDEX 1.
 
-    IF lv_msg CS 'Test Operation' AND lt_msgs IS NOT INITIAL.
-      cl_abap_unit_assert=>assert_true( abap_true ).
-    ELSE.
-      cl_abap_unit_assert=>fail( ).
-    ENDIF.
+    cl_abap_unit_assert=>assert_not_initial( lt_msgs ).
+    cl_abap_unit_assert=>assert_char_cp( act = lv_msg
+                                         exp = '*Test Operation*' ).
 
   ENDMETHOD.
 
