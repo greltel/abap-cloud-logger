@@ -50,6 +50,16 @@ CLASS zcl_cloud_logger DEFINITION
     "! per-parameter IS SUPPLIED semantics drive the config-conflict detection in
     "! get_instance; collapsing them into a single structure would lose that
     "! distinction and break the public API. Documented, accepted deviation.</p>
+    "!
+    "! @parameter enable_emergency_log   | abap_true mirrors every entry via XCO BAL (best-effort)
+    "! @parameter object                 | Application Log object (BAL); required when db_save = abap_true
+    "! @parameter subobject              | Application Log subobject
+    "! @parameter ext_number             | External ID; also part of the multiton key
+    "! @parameter db_save                | abap_true persists on save_application_log; abap_false makes save a no-op
+    "! @parameter expiry_date            | Log expiry date (default = today + 5)
+    "! @parameter trim_limit             | Max internal-error trail entries, FIFO (default 100; negative raises)
+    "! @parameter logger_instance        | Shared logger for the object / subobject / ext_number key
+    "! @raising   zcx_cloud_logger_error | Config conflict with an existing instance, or creation failure
     CLASS-METHODS get_instance
       IMPORTING enable_emergency_log   TYPE abap_boolean                          DEFAULT abap_false
                 !object                TYPE cl_bali_header_setter=>ty_object      OPTIONAL
@@ -83,13 +93,20 @@ CLASS zcl_cloud_logger DEFINITION
     DATA timer_start          TYPE timestampl.
     DATA context              TYPE string.
 
-    "! <p class="shorttext synchronized">CONSTRUCTOR</p>
+    "! <p class="shorttext synchronized">Initialize a logger instance</p>
     "!
-    "! @parameter object      | <p class="shorttext synchronized">IV_OBJECT</p>
-    "! @parameter subobject   | <p class="shorttext synchronized">IV_SUBOBJECT</p>
-    "! @parameter ext_number  | <p class="shorttext synchronized">IV_EXT_NUMBER</p>
-    "! @parameter db_save     | <p class="shorttext synchronized">IV_DB_SAVE</p>
-    "! @parameter expiry_date | <p class="shorttext synchronized">Application Log: Expiration Date</p>
+    "! <p>Clean ABAP §2366: mirrors get_instance and intentionally exposes > 3
+    "! optional parameters. They are genuinely independent configuration
+    "! switches; collapsing them into a single structure would break the
+    "! public factory contract. Documented, accepted deviation.</p>
+    "!
+    "! @parameter enable_emergency_log | abap_true mirrors entries via XCO BAL
+    "! @parameter object               | Application Log object (BAL)
+    "! @parameter subobject            | Application Log subobject
+    "! @parameter ext_number           | External ID for the log
+    "! @parameter db_save              | abap_true persists on save_application_log
+    "! @parameter expiry_date          | Log expiry date (default = today + 5)
+    "! @parameter trim_limit           | Max internal-error trail entries (FIFO)
     METHODS constructor
       IMPORTING enable_emergency_log TYPE abap_boolean                          DEFAULT abap_false
                 !object              TYPE cl_bali_header_setter=>ty_object      OPTIONAL
@@ -127,7 +144,7 @@ CLASS zcl_cloud_logger DEFINITION
 
     "! <p class="shorttext synchronized">Safe symsg from free text for RAP fallback</p>
     CLASS-METHODS text_to_symsg
-      IMPORTING text          TYPE string
+      IMPORTING !text         TYPE string
                 msgty         TYPE symsgty
       RETURNING VALUE(result) TYPE symsg.
 
@@ -898,7 +915,7 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
       CATCH cx_parameter_invalid_range cx_parameter_invalid_type.
         safe_log_string( string      = CONV #( TEXT-001 )
                          msgty       = zif_cloud_logger=>c_message_type-error
-                         caller_name = 'stop_timer (timer arithmetic)' ).
+                         caller_name = `stop_timer (timer arithmetic)` ).
 
         CLEAR timer_start.
     ENDTRY.
@@ -944,7 +961,7 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
         " Emergency log is best-effort and must never break the main flow,
         " but a silent failure used to be invisible. Record it in the
         " diagnostic trail so a "all mirrors failed" situation is surfaced.
-        record_internal_error( method_name = 'mirror_to_emergency_log'
+        record_internal_error( method_name = `mirror_to_emergency_log`
                                exception   = mirror_error ).
     ENDTRY.
   ENDMETHOD.
