@@ -1,5 +1,5 @@
 
-CLASS ltc_external_methods DEFINITION FINAL
+CLASS ltcl_external_methods DEFINITION FINAL
   FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
 
   PRIVATE SECTION.
@@ -40,7 +40,7 @@ CLASS ltc_external_methods DEFINITION FINAL
     METHODS save_in_loop_no_pollution FOR TESTING RAISING cx_static_check.
     METHODS trim_limit_respects_custom FOR TESTING RAISING cx_static_check.
     METHODS trim_limit_invalid_raises FOR TESTING RAISING cx_static_check.
-        METHODS chain_initial_bapiret2_safe    FOR TESTING RAISING cx_static_check.
+    METHODS chain_initial_bapiret2_safe    FOR TESTING RAISING cx_static_check.
     METHODS chain_unbound_handle_safe      FOR TESTING RAISING cx_static_check.
     METHODS get_instance_conflict_trim     FOR TESTING RAISING cx_static_check.
 
@@ -48,7 +48,7 @@ CLASS ltc_external_methods DEFINITION FINAL
 ENDCLASS.
 
 
-CLASS ltc_external_methods IMPLEMENTATION.
+CLASS ltcl_external_methods IMPLEMENTATION.
 
   METHOD setup.
 

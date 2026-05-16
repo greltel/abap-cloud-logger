@@ -223,7 +223,7 @@
     <SEOCOMPOTX>
      <CMPNAME>GET_INSTANCE</CMPNAME>
      <LANGU>E</LANGU>
-     <DESCRIPT>Get Cloud Logger Instance</DESCRIPT>
+     <DESCRIPT>Get or create the multiton logger instance</DESCRIPT>
     </SEOCOMPOTX>
     <SEOCOMPOTX>
      <CMPNAME>GET_INSTANCE</CMPNAME>
@@ -294,6 +294,11 @@
      <CMPNAME>SAFE_LOG_STRING</CMPNAME>
      <LANGU>E</LANGU>
      <DESCRIPT>Best-effort log_string_add for internal/self-logging</DESCRIPT>
+    </SEOCOMPOTX>
+    <SEOCOMPOTX>
+     <CMPNAME>TEXT_TO_SYMSG</CMPNAME>
+     <LANGU>E</LANGU>
+     <DESCRIPT>Safe symsg from free text for RAP fallback</DESCRIPT>
     </SEOCOMPOTX>
     <SEOCOMPOTX>
      <CMPNAME>TRIM_INTERNAL_ERRORS</CMPNAME>

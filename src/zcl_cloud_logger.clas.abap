@@ -5,100 +5,62 @@ CLASS zcl_cloud_logger DEFINITION
   CREATE PRIVATE .
 
   PUBLIC SECTION.
+    INTERFACES zif_cloud_logger.
 
-    INTERFACES zif_cloud_logger .
+    ALIASES clear_internal_errors        FOR zif_cloud_logger~clear_internal_errors.
+    ALIASES get_internal_errors          FOR zif_cloud_logger~get_internal_errors.
+    ALIASES c_default_message_attributes FOR zif_cloud_logger~c_default_message_attributes.
+    ALIASES c_message_type               FOR zif_cloud_logger~c_message_type.
+    ALIASES c_select_options             FOR zif_cloud_logger~c_select_options.
+    ALIASES free                         FOR zif_cloud_logger~free.
+    ALIASES get_handle                   FOR zif_cloud_logger~get_handle.
+    ALIASES get_log_handle               FOR zif_cloud_logger~get_log_handle.
+    ALIASES get_messages                 FOR zif_cloud_logger~get_messages.
+    ALIASES get_messages_as_bapiret2     FOR zif_cloud_logger~get_messages_as_bapiret2.
+    ALIASES get_messages_flat            FOR zif_cloud_logger~get_messages_flat.
+    ALIASES get_messages_rap             FOR zif_cloud_logger~get_messages_rap.
+    ALIASES get_message_count            FOR zif_cloud_logger~get_message_count.
+    ALIASES log_bapiret2_structure_add   FOR zif_cloud_logger~log_bapiret2_structure_add.
+    ALIASES log_bapiret2_table_add       FOR zif_cloud_logger~log_bapiret2_table_add.
+    ALIASES log_contains_error           FOR zif_cloud_logger~log_contains_error.
+    ALIASES log_contains_messages        FOR zif_cloud_logger~log_contains_messages.
+    ALIASES log_contains_warning         FOR zif_cloud_logger~log_contains_warning.
+    ALIASES log_data_add                 FOR zif_cloud_logger~log_data_add.
+    ALIASES log_exception_add            FOR zif_cloud_logger~log_exception_add.
+    ALIASES log_is_empty                 FOR zif_cloud_logger~log_is_empty.
+    ALIASES log_message_add              FOR zif_cloud_logger~log_message_add.
+    ALIASES log_string_add               FOR zif_cloud_logger~log_string_add.
+    ALIASES log_syst_add                 FOR zif_cloud_logger~log_syst_add.
+    ALIASES merge_logs                   FOR zif_cloud_logger~merge_logs.
+    ALIASES reset_appl_log               FOR zif_cloud_logger~reset_appl_log.
+    ALIASES save_application_log         FOR zif_cloud_logger~save_application_log.
+    ALIASES search_message               FOR zif_cloud_logger~search_message.
+    ALIASES bapiret2_messages            FOR zif_cloud_logger~bapiret2_messages.
+    ALIASES flat_message                 FOR zif_cloud_logger~flat_message.
+    ALIASES flat_messages                FOR zif_cloud_logger~flat_messages.
+    ALIASES logger_instance              FOR zif_cloud_logger~t_logger_instance.
+    ALIASES logger_instances_type        FOR zif_cloud_logger~logger_instances.
+    ALIASES log_messages_type            FOR zif_cloud_logger~log_messages.
+    ALIASES rap_messages                 FOR zif_cloud_logger~rap_messages.
 
-    ALIASES clear_internal_errors
-      FOR zif_cloud_logger~clear_internal_errors.
-    ALIASES get_internal_errors
-      FOR zif_cloud_logger~get_internal_errors .
-    ALIASES c_default_message_attributes
-      FOR zif_cloud_logger~c_default_message_attributes .
-    ALIASES c_message_type
-      FOR zif_cloud_logger~c_message_type .
-    ALIASES c_select_options
-      FOR zif_cloud_logger~c_select_options .
-    ALIASES free
-      FOR zif_cloud_logger~free .
-    ALIASES get_handle
-      FOR zif_cloud_logger~get_handle .
-    ALIASES get_log_handle
-      FOR zif_cloud_logger~get_log_handle .
-    ALIASES get_messages
-      FOR zif_cloud_logger~get_messages .
-    ALIASES get_messages_as_bapiret2
-      FOR zif_cloud_logger~get_messages_as_bapiret2 .
-    ALIASES get_messages_flat
-      FOR zif_cloud_logger~get_messages_flat .
-    ALIASES get_messages_rap
-      FOR zif_cloud_logger~get_messages_rap .
-    ALIASES get_message_count
-      FOR zif_cloud_logger~get_message_count .
-    ALIASES log_bapiret2_structure_add
-      FOR zif_cloud_logger~log_bapiret2_structure_add .
-    ALIASES log_bapiret2_table_add
-      FOR zif_cloud_logger~log_bapiret2_table_add .
-    ALIASES log_contains_error
-      FOR zif_cloud_logger~log_contains_error .
-    ALIASES log_contains_messages
-      FOR zif_cloud_logger~log_contains_messages .
-    ALIASES log_contains_warning
-      FOR zif_cloud_logger~log_contains_warning .
-    ALIASES log_data_add
-      FOR zif_cloud_logger~log_data_add .
-    ALIASES log_exception_add
-      FOR zif_cloud_logger~log_exception_add .
-    ALIASES log_is_empty
-      FOR zif_cloud_logger~log_is_empty .
-    ALIASES log_message_add
-      FOR zif_cloud_logger~log_message_add .
-    ALIASES log_string_add
-      FOR zif_cloud_logger~log_string_add .
-    ALIASES log_syst_add
-      FOR zif_cloud_logger~log_syst_add .
-    ALIASES merge_logs
-      FOR zif_cloud_logger~merge_logs .
-    ALIASES reset_appl_log
-      FOR zif_cloud_logger~reset_appl_log .
-    ALIASES save_application_log
-      FOR zif_cloud_logger~save_application_log .
-    ALIASES search_message
-      FOR zif_cloud_logger~search_message .
-    ALIASES bapiret2_messages
-      FOR zif_cloud_logger~bapiret2_messages .
-    ALIASES flat_message
-      FOR zif_cloud_logger~flat_message .
-    ALIASES flat_messages
-      FOR zif_cloud_logger~flat_messages .
-    ALIASES logger_instance
-      FOR zif_cloud_logger~t_logger_instance .
-    ALIASES logger_instances_type
-      FOR zif_cloud_logger~logger_instances .
-    ALIASES log_messages_type
-      FOR zif_cloud_logger~log_messages .
-    ALIASES rap_messages
-      FOR zif_cloud_logger~rap_messages .
-
-    "! <p class="shorttext synchronized">Get Cloud Logger Instance</p>
+    "! <p class="shorttext synchronized">Get or create the multiton logger instance</p>
     "!
-    "! @parameter object          | <p class="shorttext synchronized">IV_OBJECT</p>
-    "! @parameter subobject       | <p class="shorttext synchronized">IV_SUBOBJECT</p>
-    "! @parameter ext_number      | <p class="shorttext synchronized">IV_EXT_NUMBER</p>
-    "! @parameter db_save         | <p class="shorttext synchronized">IV_DB_SAVE</p>
-    "! @parameter expiry_date     | <p class="shorttext synchronized">Application Log: Expiration Date</p>
-    "! @parameter logger_instance | <p class="shorttext synchronized">RE_LOGGER_INSTANCE</p>
+    "! <p>Clean ABAP §2366: this factory intentionally exposes > 3 optional
+    "! parameters. They are genuinely independent configuration switches and the
+    "! per-parameter IS SUPPLIED semantics drive the config-conflict detection in
+    "! get_instance; collapsing them into a single structure would lose that
+    "! distinction and break the public API. Documented, accepted deviation.</p>
     CLASS-METHODS get_instance
-      IMPORTING
-        !enable_emergency_log  TYPE abap_boolean DEFAULT abap_false
-        !object                TYPE cl_bali_header_setter=>ty_object OPTIONAL
-        !subobject             TYPE cl_bali_header_setter=>ty_subobject OPTIONAL
-        !ext_number            TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
-        !db_save               TYPE abap_boolean DEFAULT abap_true
-        !expiry_date           TYPE xsddate_d OPTIONAL
-        !trim_limit            TYPE i DEFAULT zif_cloud_logger=>c_default_trim_limit
-      RETURNING
-        VALUE(logger_instance) TYPE REF TO zif_cloud_logger
-        RAISING   zcx_cloud_logger_error .
+      IMPORTING enable_emergency_log   TYPE abap_boolean                          DEFAULT abap_false
+                !object                TYPE cl_bali_header_setter=>ty_object      OPTIONAL
+                subobject              TYPE cl_bali_header_setter=>ty_subobject   OPTIONAL
+                ext_number             TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
+                db_save                TYPE abap_boolean                          DEFAULT abap_true
+                expiry_date            TYPE xsddate_d                             OPTIONAL
+                trim_limit             TYPE i                                     DEFAULT zif_cloud_logger=>c_default_trim_limit
+      RETURNING VALUE(logger_instance) TYPE REF TO zif_cloud_logger
+      RAISING   zcx_cloud_logger_error.
+
   PROTECTED SECTION.
   PRIVATE SECTION.
     TYPES severity_filter_range TYPE RANGE OF symsgty.
@@ -163,6 +125,12 @@ CLASS zcl_cloud_logger DEFINITION
       IMPORTING !message      TYPE symsg
       RETURNING VALUE(result) TYPE flat_message.
 
+    "! <p class="shorttext synchronized">Safe symsg from free text for RAP fallback</p>
+    CLASS-METHODS text_to_symsg
+      IMPORTING text          TYPE string
+                msgty         TYPE symsgty
+      RETURNING VALUE(result) TYPE symsg.
+
     "! <p class="shorttext synchronized">Create Emergency Log</p>
     METHODS create_emergency_log RAISING zcx_cloud_logger_error.
 
@@ -171,7 +139,7 @@ CLASS zcl_cloud_logger DEFINITION
     "! @parameter header | <p class="shorttext synchronized">Application Log Header Data (for Writing)</p>
     METHODS create_header
       RETURNING VALUE(header) TYPE REF TO if_bali_header_setter
-      RAISING zcx_cloud_logger_error.
+      RAISING   zcx_cloud_logger_error.
 
     "! <p class="shorttext synchronized">Get Severity Level of Message Type</p>
     "!
@@ -230,7 +198,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
+CLASS zcl_cloud_logger IMPLEMENTATION.
 
 
   METHOD add_message_internal_log.
@@ -413,12 +381,14 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~get_messages_rap.
-
-    RETURN VALUE #( FOR message IN log_messages
-                  ( zcx_cloud_logger_message=>new_message_from_symsg( message-symsg ) ) ).
-
+    result = VALUE #( FOR msg IN log_messages
+                      ( COND #(
+                          WHEN msg-symsg-msgid IS NOT INITIAL AND msg-symsg-msgno IS NOT INITIAL
+                          THEN zcx_cloud_logger_message=>new_message_from_symsg( msg-symsg )
+                          ELSE zcx_cloud_logger_message=>new_message_from_symsg(
+                                   text_to_symsg( text  = msg-message
+                                                  msgty = msg-symsg-msgty ) ) ) ) ).
   ENDMETHOD.
 
 
@@ -481,7 +451,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         ENDLOOP.
 
       CATCH cx_bali_runtime INTO DATA(exception).
-        record_internal_error( method_name = 'log_contains_error'
+        record_internal_error( method_name = `log_contains_error`
                                exception   = exception ).
     ENDTRY.
 
@@ -505,7 +475,7 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
         ENDLOOP.
 
       CATCH cx_bali_runtime INTO DATA(exception).
-        record_internal_error( method_name = 'log_contains_warning'
+        record_internal_error( method_name = `log_contains_warning`
                                exception   = exception ).
     ENDTRY.
 
@@ -537,11 +507,8 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~log_is_empty.
-
-result = xsdbool( log_messages IS INITIAL ).
-
+    result = xsdbool( log_messages IS INITIAL ).
   ENDMETHOD.
 
 
@@ -653,7 +620,7 @@ result = xsdbool( log_messages IS INITIAL ).
         trim_internal_errors( ).
 
       CATCH cx_bali_runtime INTO DATA(exception).
-        record_internal_error( method_name = 'merge_logs'
+        record_internal_error( method_name = `merge_logs`
                                exception   = exception ).
     ENDTRY.
   ENDMETHOD.
@@ -691,12 +658,12 @@ result = xsdbool( log_messages IS INITIAL ).
         TRY.
             create_emergency_log( ).
           CATCH zcx_cloud_logger_error INTO DATA(emerg_error).
-            record_internal_error( method_name = 'reset_appl_log (emergency log recreation)'
+            record_internal_error( method_name = `reset_appl_log (emergency log recreation)`
                                    exception   = emerg_error ).
         ENDTRY.
 
       CATCH cx_bali_runtime INTO DATA(exception).
-        record_internal_error( method_name = 'reset_appl_log'
+        record_internal_error( method_name = `reset_appl_log`
                                exception   = exception ).
     ENDTRY.
   ENDMETHOD.
@@ -709,7 +676,7 @@ result = xsdbool( log_messages IS INITIAL ).
       " Record the no-op in the internal diagnostic trail. We deliberately do NOT
       " write to the user-facing log here: callers may invoke save_application_log
       " in a loop, and a per-call warning would flood log_messages with noise.
-      record_internal_error( method_name = 'save_application_log'
+      record_internal_error( method_name = `save_application_log`
                              error_text  = CONV #( TEXT-007 ) ).
       RETURN.
     ENDIF.
@@ -856,7 +823,7 @@ result = xsdbool( log_messages IS INITIAL ).
       CATCH cx_root INTO DATA(error).
         safe_log_string( string      = |{ TEXT-008 } { error->get_text( ) }|
                          msgty       = c_message_type-error
-                         caller_name = 'log_data_add (fallback emit)' ).
+                         caller_name = `log_data_add (fallback emit)` ).
     ENDTRY.
 
     logger = me.
@@ -897,7 +864,7 @@ result = xsdbool( log_messages IS INITIAL ).
     IF timer_start IS NOT INITIAL.
       safe_log_string( string      = CONV #( TEXT-006 )
                        msgty       = c_message_type-warning
-                       caller_name = 'start_timer' ).
+                       caller_name = `start_timer` ).
     ENDIF.
 
     GET TIME STAMP FIELD timer_start.
@@ -911,7 +878,7 @@ result = xsdbool( log_messages IS INITIAL ).
     IF timer_start IS INITIAL.
       safe_log_string( string      = CONV #( TEXT-002 )
                        msgty       = zif_cloud_logger=>c_message_type-warning
-                       caller_name = 'stop_timer' ).
+                       caller_name = `stop_timer` ).
       logger = me.
       RETURN.
     ENDIF.
@@ -924,7 +891,7 @@ result = xsdbool( log_messages IS INITIAL ).
 
         safe_log_string( string      = |{ TEXT-003 } { text } { TEXT-004 } { diff DECIMALS = 3 } { TEXT-005 }|
                          msgty       = zif_cloud_logger=>c_message_type-information
-                         caller_name = 'stop_timer (result emit)' ).
+                         caller_name = `stop_timer (result emit)` ).
 
         CLEAR timer_start.
 
@@ -995,7 +962,7 @@ result = xsdbool( log_messages IS INITIAL ).
                     method     = method_name
                     error_text = text ) INTO TABLE internal_errors.
 
-trim_internal_errors( ).
+    trim_internal_errors( ).
 
   ENDMETHOD.
 
@@ -1024,11 +991,27 @@ trim_internal_errors( ).
   ENDMETHOD.
 
 
-    METHOD trim_internal_errors.
+  METHOD trim_internal_errors.
 
     IF lines( internal_errors ) > me->trim_limit.
       DELETE internal_errors FROM 1 TO ( lines( internal_errors ) - me->trim_limit ).
     ENDIF.
 
+  ENDMETHOD.
+
+  METHOD text_to_symsg.
+    DATA buffer TYPE c LENGTH 200.
+
+    buffer = text.                       " auto truncate/pad to 200, never raises
+
+    result = VALUE #( msgid = 'Z_CLOUD_LOGGER'
+                      msgno = '001'
+                      msgty = COND #( WHEN msgty IS NOT INITIAL
+                                      THEN msgty
+                                      ELSE c_message_type-information )
+                      msgv1 = buffer+0(50)
+                      msgv2 = buffer+50(50)
+                      msgv3 = buffer+100(50)
+                      msgv4 = buffer+150(50) ).
   ENDMETHOD.
 ENDCLASS.
