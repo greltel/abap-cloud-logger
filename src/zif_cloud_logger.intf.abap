@@ -102,7 +102,7 @@ INTERFACE zif_cloud_logger
     RAISING zcx_cloud_logger_error.
   METHODS log_exception_add
     IMPORTING
-      !severity     TYPE symsgty DEFAULT c_default_message_attributes-type
+      !severity     TYPE symsgty DEFAULT c_message_type-error
       !exception    TYPE REF TO cx_root
     RETURNING
       VALUE(logger) TYPE REF TO zif_cloud_logger
@@ -158,7 +158,7 @@ INTERFACE zif_cloud_logger
       VALUE(count) TYPE int4 .
   METHODS reset_appl_log
     IMPORTING
-      !delete_from_db TYPE abap_bool DEFAULT abap_true
+      !delete_from_db TYPE abap_bool DEFAULT abap_false
     RAISING zcx_cloud_logger_error.
   METHODS log_is_empty
     RETURNING

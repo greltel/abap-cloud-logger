@@ -642,35 +642,21 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
-
   METHOD zif_cloud_logger~reset_appl_log.
     TRY.
-
-        " Delete from Database
         IF log_handle IS BOUND AND delete_from_db = abap_true.
           cl_bali_log_db=>get_instance( )->delete_log( log_handle ).
         ENDIF.
 
-        " Handle Recreation
-        CLEAR log_handle.
-        log_handle = cl_bali_log=>create( ).
+        DATA(new_handle) = cl_bali_log=>create( ).
+        DATA(new_header) = create_header( ).
+        new_handle->set_header( new_header ).
 
-        header = COND #( WHEN header IS BOUND
-                         THEN header
-                         ELSE create_header( ) ).
-
-        log_handle->set_header( header ).
-
+        log_handle = new_handle.
+        header = new_header.
         CLEAR log_messages.
-
         CLEAR: timer_start,
                context.
-
-        " internal_errors is intentionally NOT cleared here. reset_appl_log
-        " starts a fresh user-facing log but the diagnostic trail must
-        " survive a reset so swallowed problems from before the reset
-        " remain visible. Only free() wipes the trail (full teardown)
-
         CLEAR emergency_log.
         TRY.
             create_emergency_log( ).
@@ -678,10 +664,13 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
             record_internal_error( method_name = `reset_appl_log (emergency log recreation)`
                                    exception   = emerg_error ).
         ENDTRY.
+      CATCH cx_bali_runtime
+            cx_uuid_error INTO DATA(exception).
 
-      CATCH cx_bali_runtime INTO DATA(exception).
         record_internal_error( method_name = `reset_appl_log`
                                exception   = exception ).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_creation
+                                                    previous = exception ).
     ENDTRY.
   ENDMETHOD.
 
