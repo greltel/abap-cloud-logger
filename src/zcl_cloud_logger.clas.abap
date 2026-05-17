@@ -215,7 +215,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_cloud_logger IMPLEMENTATION.
+CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
 
   METHOD add_message_internal_log.
@@ -281,6 +281,7 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     ENDTRY.
 
   ENDMETHOD.
+
 
   METHOD get_instance.
     TRY.
@@ -398,6 +399,7 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
 
   ENDMETHOD.
 
+
   METHOD zif_cloud_logger~get_messages_rap.
     result = VALUE #( FOR msg IN log_messages
                       ( COND #(
@@ -458,19 +460,10 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
 
   METHOD zif_cloud_logger~log_contains_error.
 
-    CLEAR result.
-    CHECK log_handle IS BOUND.
-
-    TRY.
-
-        LOOP AT log_handle->get_all_items( ) ASSIGNING FIELD-SYMBOL(<fs>) WHERE item->severity CA c_message_type-error_pattern.
-          RETURN abap_true.
-        ENDLOOP.
-
-      CATCH cx_bali_runtime INTO DATA(exception).
-        record_internal_error( method_name = `log_contains_error`
-                               exception   = exception ).
-    ENDTRY.
+    result = xsdbool(
+         line_exists( log_messages[ type = c_message_type-error ] )
+      OR line_exists( log_messages[ type = c_message_type-abandon ] )
+      OR line_exists( log_messages[ type = c_message_type-terminate ] ) ).
 
   ENDMETHOD.
 
@@ -482,19 +475,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
 
   METHOD zif_cloud_logger~log_contains_warning.
 
-    CLEAR result.
-    CHECK log_handle IS BOUND.
-
-    TRY.
-
-        LOOP AT log_handle->get_all_items( ) ASSIGNING FIELD-SYMBOL(<fs>) WHERE item->severity CA c_message_type-warning_pattern.
-          RETURN abap_true.
-        ENDLOOP.
-
-      CATCH cx_bali_runtime INTO DATA(exception).
-        record_internal_error( method_name = `log_contains_warning`
-                               exception   = exception ).
-    ENDTRY.
+    result = xsdbool(
+         log_contains_error( ) = abap_true
+      OR line_exists( log_messages[ type = c_message_type-warning ] ) ).
 
   ENDMETHOD.
 
@@ -523,6 +506,7 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
                                                     previous = exception_local ).
     ENDTRY.
   ENDMETHOD.
+
 
   METHOD zif_cloud_logger~log_is_empty.
     result = xsdbool( log_messages IS INITIAL ).
@@ -642,10 +626,18 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
+
   METHOD zif_cloud_logger~reset_appl_log.
     TRY.
         IF log_handle IS BOUND AND delete_from_db = abap_true.
-          cl_bali_log_db=>get_instance( )->delete_log( log_handle ).
+          TRY.
+              cl_bali_log_db=>get_instance( )->delete_log( log_handle ).
+            CATCH cx_bali_runtime INTO DATA(delete_error).
+
+              record_internal_error(
+                method_name = `reset_appl_log (db delete - log not persisted?)`
+                exception   = delete_error ).
+          ENDTRY.
         ENDIF.
 
         DATA(new_handle) = cl_bali_log=>create( ).
@@ -1004,6 +996,7 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     ENDIF.
 
   ENDMETHOD.
+
 
   METHOD text_to_symsg.
     DATA buffer TYPE c LENGTH 200.
