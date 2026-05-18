@@ -66,7 +66,7 @@ ENDTRY.
 ### 3. Message Add
 
 ```abap
-logger->log_message_add( isymsg = VALUE #( msgty = 'W'
+logger->log_message_add( symsg = VALUE #( msgty = 'W'
                                            msgid = 'CL'
                                            msgno = '000'
                                            msgv1 = 'Test Message' ) ).
