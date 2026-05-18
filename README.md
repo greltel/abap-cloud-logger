@@ -59,7 +59,7 @@ TRY.
 
   CATCH cx_sy_zerodivide INTO DATA(error).
     " Pass the exception object to the logger
-    lo_logger->log_exception_add( error ).
+    logger->log_exception_add( error ).
 ENDTRY.
 ```
 
@@ -94,33 +94,33 @@ logger->log_bapiret2_structure_add( VALUE #( ) ) .
 SELECT * FROM i_companycode INTO TABLE @DATA(company_codes) UP TO 10 ROWS.
 
 " Log the whole table as JSON
-lo_logger->log_data_add( company_codes ).
+logger->log_data_add( company_codes ).
 ```
 
 ### 7. Get Messages
 
 ```abap
-DATA(message_count)     = lo_logger->get_message_count( ).
+DATA(message_count)     = logger->get_message_count( ).
 
-DATA(messages_bapiret2) = lo_logger->get_messages_as_bapiret2( ).
+DATA(messages_bapiret2) = logger->get_messages_as_bapiret2( ).
 
-DATA(messages)          = lo_logger->get_messages( ).
+DATA(messages)          = logger->get_messages( ).
 
-DATA(messages_flat)     = lo_logger->get_messages_flat( ).
+DATA(messages_flat)     = logger->get_messages_flat( ).
 
-DATA(messages_rap)      = lo_logger->get_messages_rap( ).
+DATA(messages_rap)      = logger->get_messages_rap( ).
 ```
 
 ### 8. Functional Methods
 
 ```abap
-DATA(error_exists)   = lo_logger->log_contains_error( ).
+DATA(error_exists)   = logger->log_contains_error( ).
 
-DATA(messages_exist) = lo_logger->log_contains_messages( ).
+DATA(messages_exist) = logger->log_contains_messages( ).
 
-DATA(warning_exists) = lo_logger->log_contains_warning( ).
+DATA(warning_exists) = logger->log_contains_warning( ).
 
-DATA(is_empty)       = lo_logger->log_is_empty( ).
+DATA(is_empty)       = logger->log_is_empty( ).
 ```
 
 ### 9. Get Log Handle
@@ -140,7 +140,7 @@ logger->save_application_log( ).
 ### 11. Search for a Specific Message
 
 ```abap
-data(specific_message_exists) = lo_logger->search_message( search = VALUE #( msgid = '00' ) ).
+data(specific_message_exists) = logger->search_message( search = VALUE #( msgid = '00' ) ).
 ```
 
 ### 12. Merge Logs
@@ -161,7 +161,7 @@ logger->merge_logs( new_logger ).
 ### 13. Reset Log
 
 ```abap
-lo_logger->reset_appl_log( delete_from_db = abap_true ).
+logger->reset_appl_log( delete_from_db = abap_true ).
 ```
 
 ### 14. Timer
