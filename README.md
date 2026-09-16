@@ -296,6 +296,26 @@ GitHub Actions runs both on every push and pull request. Some things only the re
 catches; see [CONTRIBUTING.md](CONTRIBUTING.md) for the list and for the pull-request
 checklist.
 
+## Quality and verification
+
+| Check | Result | Where |
+|---|---|---|
+| ABAP Unit | 66 tests, all green | ADT on S/4HANA 2023 FPS03 (ABAP 7.58), off-stack on every commit |
+| ATC, variant `ABAP_CLOUD_READINESS` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
+| ATC, variant `S4HANA_READINESS_2023` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
+| abaplint, 178 rules, language version Cloud, API snapshot `steampunk-2305-api` | 0 findings | [GitHub Actions](https://github.com/greltel/abap-cloud-logger/actions/workflows/test.yml) |
+
+Verified on:
+
+| System | Status |
+|---|---|
+| SAP S/4HANA 2023 FPS03 on-premise, ABAP for Cloud Development | verified with every release |
+| SAP BTP ABAP Environment | not yet verified — a pull and an ABAP Unit run on a BTP system would be a welcome contribution ([issue template](.github/ISSUE_TEMPLATE/bug_report.yml)) |
+| SAP S/4HANA Cloud Public Edition | not yet verified |
+
+The library uses released APIs only; the checks above are what backs that statement, and the
+table says exactly where it has been run.
+
 ## Changelog and roadmap
 
 The version history lives in [CHANGELOG.md](CHANGELOG.md). Planned:
