@@ -1,8 +1,8 @@
 "! <p class="shorttext synchronized" lang="en">Cloud Logger Viewer for the ADT console</p>
 "! Writes a logger's entries and internal error trail to an
 "! {@link if_oo_adt_classrun_out} console, e.g. from a class run with F9 in ADT.
-"! Works in ABAP for Cloud Development. SAP GUI systems can use the ALV
-"! viewer from the <em>gui</em> sub-package instead.
+"! Any other output channel is a further implementation of
+"! {@link zif_cloud_logger_viewer}.
 CLASS zcl_cloud_logger_view_console DEFINITION
   PUBLIC
   FINAL
@@ -62,4 +62,5 @@ CLASS zcl_cloud_logger_view_console IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
+
 
