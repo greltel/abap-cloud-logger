@@ -18,7 +18,7 @@ INTERFACE zif_cloud_logger_system
   METHODS now
     RETURNING VALUE(result) TYPE timestampl.
 
-  "! @parameter result | Name of the current user as it appears in log entries
+  "! @parameter result | Current user: alias when maintained, technical name otherwise
   METHODS user_name
     RETURNING VALUE(result) TYPE syuname.
 

@@ -336,22 +336,28 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
       RETURN.
     ENDIF.
 
+    " A message without severity would be invisible to every log_contains_* query
+    DATA(message) = symsg.
+    IF message-msgty IS INITIAL.
+      message-msgty = c_default_message_attributes-type.
+    ENDIF.
+
     TRY.
-        DATA(item) = cl_bali_message_setter=>create( severity   = symsg-msgty
-                                                     id         = symsg-msgid
-                                                     number     = symsg-msgno
-                                                     variable_1 = symsg-msgv1
-                                                     variable_2 = symsg-msgv2
-                                                     variable_3 = symsg-msgv3
-                                                     variable_4 = symsg-msgv4 ).
+        DATA(item) = cl_bali_message_setter=>create( severity   = message-msgty
+                                                     id         = message-msgid
+                                                     number     = message-msgno
+                                                     variable_1 = message-msgv1
+                                                     variable_2 = message-msgv2
+                                                     variable_3 = message-msgv3
+                                                     variable_4 = message-msgv4 ).
 
         log_handle->add_item( item ).
 
-        record_entry( VALUE #( symsg   = symsg
+        record_entry( VALUE #( symsg   = message
                                item    = item
-                               message = resolve_message_text( symsg ) ) ).
+                               message = resolve_message_text( message ) ) ).
 
-        mirror_to_emergency_log( symsg = symsg ).
+        mirror_to_emergency_log( symsg = message ).
 
       CATCH cx_bali_runtime INTO DATA(error).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
@@ -455,7 +461,7 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     self = me.
     ensure_active( ).
 
-    IF external_log IS NOT BOUND.
+    IF external_log IS NOT BOUND OR external_log = me.
       RETURN.
     ENDIF.
 
@@ -469,6 +475,8 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
         INSERT LINES OF external_log->get_messages( )        INTO TABLE log_messages.
         INSERT LINES OF external_log->get_internal_errors( ) INTO TABLE internal_errors.
 
+        " Keep the merged trail chronological so trimming evicts the oldest entries
+        SORT internal_errors BY timestamp.
         trim_internal_errors( ).
 
       CATCH cx_bali_runtime INTO DATA(error).
@@ -556,10 +564,17 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_cloud_logger~free.
-    DELETE TABLE logger_instances
-           WITH TABLE KEY log_object    = object
-                          log_subobject = subobject
-                          extnumber     = ext_number.
+    " Only the instance that owns the registry entry may drop it. A second free( )
+    " on a stale reference must not orphan the instance created in the meantime.
+    DATA(registered) = VALUE #( logger_instances[ log_object    = object
+                                                  log_subobject = subobject
+                                                  extnumber     = ext_number ]-logger OPTIONAL ).
+    IF registered = me.
+      DELETE TABLE logger_instances
+             WITH TABLE KEY log_object    = object
+                            log_subobject = subobject
+                            extnumber     = ext_number.
+    ENDIF.
 
     released = abap_true.
     CLEAR log_handle.
@@ -946,5 +961,6 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
+
 
 

@@ -47,6 +47,9 @@ CLASS ltc_cloud_logger DEFINITION FINAL
     METHODS given_freed_then_queries_empty  FOR TESTING RAISING cx_static_check.
     METHODS given_freed_twice_then_ok       FOR TESTING RAISING cx_static_check.
     METHODS given_freed_then_new_instance FOR TESTING RAISING cx_static_check.
+    METHODS given_stale_free_then_new_kept  FOR TESTING RAISING cx_static_check.
+    METHODS when_self_merge_then_unchanged  FOR TESTING RAISING cx_static_check.
+    METHODS given_blank_msgty_then_warning  FOR TESTING RAISING cx_static_check.
     METHODS given_min_sev_e_then_keeps_2    FOR TESTING RAISING cx_static_check.
     METHODS when_log_data_then_json_entry   FOR TESTING RAISING cx_static_check.
     METHODS given_500_chars_then_kept       FOR TESTING RAISING cx_static_check.
@@ -402,6 +405,49 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
                                         exp = 1
                                         msg = `The fresh instance must be fully usable` ).
+  ENDMETHOD.
+
+  METHOD given_stale_free_then_new_kept.
+    DATA(stale) = cut.
+    stale->free( ).
+    cut = zcl_cloud_logger=>get_instance( object    = test_object
+                                          subobject = test_subobject
+                                          db_save   = abap_true ).
+
+    stale->free( ).
+
+    DATA(again) = zcl_cloud_logger=>get_instance( object    = test_object
+                                                  subobject = test_subobject
+                                                  db_save   = abap_true ).
+
+    cl_abap_unit_assert=>assert_equals( act = again
+                                        exp = cut
+                                        msg = `free( ) on a stale reference must not drop the registered instance` ).
+  ENDMETHOD.
+
+  METHOD when_self_merge_then_unchanged.
+    cut->log_string_add( `only one` ).
+
+    DATA(chained) = cut->merge_logs( cut ).
+
+    cl_abap_unit_assert=>assert_bound( act = chained
+                                       msg = `Self-merge must still return the logger` ).
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 1
+                                        msg = `Merging a logger into itself must not duplicate entries` ).
+  ENDMETHOD.
+
+  METHOD given_blank_msgty_then_warning.
+    cut->log_message_add( VALUE #( msgid = 'CL'
+                                   msgno = '000'
+                                   msgv1 = 'no severity given' ) ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( zif_cloud_logger=>c_message_type-warning )
+                                        exp = 1
+                                        msg = `A message without severity must default to warning` ).
+    cl_abap_unit_assert=>assert_equals( act = cut->log_contains_warning( )
+                                        exp = abap_true
+                                        msg = `The defaulted entry must be visible to the severity queries` ).
   ENDMETHOD.
 
   METHOD given_min_sev_e_then_keeps_2.
@@ -921,6 +967,7 @@ CLASS ltc_cloud_logger_isolated DEFINITION FINAL
     METHODS given_reset_db_then_deleted     FOR TESTING RAISING cx_static_check.
     METHODS given_reset_no_db_no_delete     FOR TESTING RAISING cx_static_check.
     METHODS given_delete_fails_then_trail   FOR TESTING RAISING cx_static_check.
+    METHODS when_merge_then_trail_ordered   FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -1119,6 +1166,28 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( act = persistence->delete_calls
                                         exp = 0
                                         msg = `A plain reset must not touch the database` ).
+  ENDMETHOD.
+
+  METHOD when_merge_then_trail_ordered.
+    " The other logger's no-op is stamped earlier than ours, so after the merge
+    " it must come first even though it was appended last.
+    system->queue_stamps( VALUE #( ( ltd_fixed_system=>second_now )
+                                   ( ltd_fixed_system=>first_now ) ) ).
+    DATA(target) = create_logger( abap_false ).
+    DATA(other)  = create_logger( abap_false ).
+    target->save_application_log( ).
+    other->save_application_log( ).
+
+    target->merge_logs( other ).
+
+    DATA(trail) = target->get_internal_errors( ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( trail )
+                                        exp = 2
+                                        msg = `Both trails must be merged` ).
+    cl_abap_unit_assert=>assert_equals( act = trail[ 1 ]-timestamp
+                                        exp = ltd_fixed_system=>first_now
+                                        msg = `The merged trail must be chronological` ).
   ENDMETHOD.
 
   METHOD given_delete_fails_then_trail.

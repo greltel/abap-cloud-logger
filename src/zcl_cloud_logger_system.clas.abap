@@ -26,7 +26,13 @@ CLASS zcl_cloud_logger_system IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_cloud_logger_system~user_name.
+    " The alias is the readable name on SAP BTP but is often not maintained
+    " on-premise; the technical name is always filled.
     result = cl_abap_context_info=>get_user_alias( ).
+
+    IF result IS INITIAL.
+      result = cl_abap_context_info=>get_user_technical_name( ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD zif_cloud_logger_system~current_message.
@@ -42,4 +48,5 @@ CLASS zcl_cloud_logger_system IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
+
 

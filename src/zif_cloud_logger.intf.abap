@@ -10,7 +10,7 @@ INTERFACE zif_cloud_logger
   PUBLIC.
 
   "! Library version (semantic versioning).
-  CONSTANTS c_version TYPE string VALUE `2.0.0`.
+  CONSTANTS c_version TYPE string VALUE `2.0.1`.
 
   "! Table of BAPI return structures.
   TYPES bapiret2_messages TYPE STANDARD TABLE OF bapiret2 WITH EMPTY KEY.
@@ -32,7 +32,7 @@ INTERFACE zif_cloud_logger
       type      TYPE symsgty,
       "! Sticky context active when the entry was added (see {@link zif_cloud_logger.METH:set_context})
       context   TYPE string,
-      "! User that added the entry
+      "! User that added the entry (alias when maintained, technical name otherwise)
       user_name TYPE syuname,
       "! System date when the entry was added
       date      TYPE xsddate_d,
@@ -92,8 +92,10 @@ INTERFACE zif_cloud_logger
 
   CONSTANTS:
     "! Defaults applied when a caller does not specify a severity or message key.
+    "! type is a literal on purpose: the off-stack transpiler does not resolve a
+    "! constant whose VALUE refers to another constant.
     BEGIN OF c_default_message_attributes,
-      type TYPE symsgty VALUE c_message_type-warning,
+      type TYPE symsgty VALUE 'W',
       id   TYPE symsgid VALUE 'CL',
       no   TYPE symsgno VALUE '000',
     END OF c_default_message_attributes.
@@ -125,8 +127,8 @@ INTERFACE zif_cloud_logger
 
   "! Appends all entries of another logger (Application Log items, internal log
   "! and internal error trail) to this one. The other logger is left unchanged.
-  "! An unbound reference is ignored; Application Log failures go to the
-  "! internal error trail.
+  "! An unbound reference or the logger itself is ignored; Application Log
+  "! failures go to the internal error trail.
   "! @parameter external_log           | Logger whose entries are copied
   "! @parameter self                   | This logger, for chaining
   "! @raising   zcx_cloud_logger_error | The instance was released with free( )
@@ -147,7 +149,8 @@ INTERFACE zif_cloud_logger
     RETURNING VALUE(self) TYPE REF TO zif_cloud_logger
     RAISING   zcx_cloud_logger_error.
 
-  "! Adds a T100 message given as SYMSG structure. An initial structure is ignored.
+  "! Adds a T100 message given as SYMSG structure. An initial structure is ignored;
+  "! a missing severity defaults to warning.
   "! @parameter symsg                  | Message type, class, number and variables
   "! @parameter self                   | This logger, for chaining
   "! @raising   zcx_cloud_logger_error | The Application Log rejected the entry, or the instance was released
@@ -303,7 +306,8 @@ INTERFACE zif_cloud_logger
   "! Application Log. The instance is dead afterwards: writing methods raise
   "! <em>instance_released</em>, queries return empty results. The next
   "! {@link zcl_cloud_logger.METH:get_instance} with the same key creates a
-  "! new instance. Calling free( ) twice is harmless.
+  "! new instance. Calling free( ) twice is harmless, also on a stale reference
+  "! after a new instance was created.
   METHODS free.
 
   "! Starts the stopwatch. Calling it again before {@link zif_cloud_logger.METH:stop_timer}
