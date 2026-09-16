@@ -6,7 +6,6 @@
     "zcl_cloud_logger_demo",
     "zcl_cloud_logger_persistence",
     "zcl_cloud_logger_system",
-    "zcl_cloud_logger_view_alv",
     "zcl_cloud_logger_view_console",
     "zcx_cloud_logger_error",
     "zcx_cloud_logger_message",
@@ -25,9 +24,6 @@
     },
     {
       "url": "https://github.com/open-abap/open-abap-bal"
-    },
-    {
-      "url": "https://github.com/open-abap/open-abap-gui"
     },
     {
       "url": "https://github.com/open-abap/open-abap-xco"
