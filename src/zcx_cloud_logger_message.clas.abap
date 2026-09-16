@@ -1,71 +1,80 @@
-class ZCX_CLOUD_LOGGER_MESSAGE definition
-  public
-  inheriting from cx_static_check
-  final
-  create public .
+"! <p class="shorttext synchronized" lang="en">Cloud Logger RAP message</p>
+"! Adapter that turns a T100 key into an {@link if_abap_behv_message}, so log
+"! entries can be handed to a RAP <em>reported</em> response.
+CLASS zcx_cloud_logger_message DEFINITION
+  PUBLIC
+  INHERITING FROM cx_static_check
+  FINAL
+  CREATE PUBLIC.
 
-public section.
+  PUBLIC SECTION.
+    INTERFACES if_t100_message.
+    INTERFACES if_t100_dyn_msg.
+    INTERFACES if_abap_behv_message.
 
-  interfaces IF_T100_MESSAGE .
-  interfaces IF_T100_DYN_MSG .
-  interfaces IF_ABAP_BEHV_MESSAGE .
+    ALIASES msgty FOR if_t100_dyn_msg~msgty.
+    ALIASES msgv1 FOR if_t100_dyn_msg~msgv1.
+    ALIASES msgv2 FOR if_t100_dyn_msg~msgv2.
+    ALIASES msgv3 FOR if_t100_dyn_msg~msgv3.
+    ALIASES msgv4 FOR if_t100_dyn_msg~msgv4.
 
-  aliases MSGTY
-    for IF_T100_DYN_MSG~MSGTY .
-  aliases MSGV1
-    for IF_T100_DYN_MSG~MSGV1 .
-  aliases MSGV2
-    for IF_T100_DYN_MSG~MSGV2 .
-  aliases MSGV3
-    for IF_T100_DYN_MSG~MSGV3 .
-  aliases MSGV4
-    for IF_T100_DYN_MSG~MSGV4 .
+    "! @parameter textid   | T100 key of the message
+    "! @parameter previous | Original exception, if any
+    "! @parameter msgty    | Message type
+    "! @parameter msgv1    | Placeholder 1
+    "! @parameter msgv2    | Placeholder 2
+    "! @parameter msgv3    | Placeholder 3
+    "! @parameter msgv4    | Placeholder 4
+    METHODS constructor
+      IMPORTING !textid   LIKE if_t100_message=>t100key OPTIONAL
+                !previous LIKE previous OPTIONAL
+                msgty     TYPE symsgty OPTIONAL
+                msgv1     TYPE symsgv OPTIONAL
+                msgv2     TYPE symsgv OPTIONAL
+                msgv3     TYPE symsgv OPTIONAL
+                msgv4     TYPE symsgv OPTIONAL.
 
-  methods CONSTRUCTOR
-    importing
-      !TEXTID like IF_T100_MESSAGE=>T100KEY optional
-      !PREVIOUS like PREVIOUS optional
-      !MSGTY type SYMSGTY optional
-      !MSGV1 type SYMSGV optional
-      !MSGV2 type SYMSGV optional
-      !MSGV3 type SYMSGV optional
-      !MSGV4 type SYMSGV optional .
-    "! Generates a new message for behavior within RAP
+    "! Creates a RAP behavior message from a T100 key.
     "! @parameter class    | Message class
     "! @parameter number   | Message number
-    "! @parameter severity | Severity
+    "! @parameter severity | RAP severity
     "! @parameter v1       | Placeholder 1
     "! @parameter v2       | Placeholder 2
     "! @parameter v3       | Placeholder 3
     "! @parameter v4       | Placeholder 4
-    "! @parameter result   | Instance for message
-  class-methods NEW_MESSAGE
-    importing
-      !CLASS type SYMSGID
-      !NUMBER type SYMSGNO
-      !SEVERITY type IF_ABAP_BEHV_MESSAGE=>T_SEVERITY
-      !V1 type SIMPLE optional
-      !V2 type SIMPLE optional
-      !V3 type SIMPLE optional
-      !V4 type SIMPLE optional
-    returning
-      value(RESULT) type ref to IF_ABAP_BEHV_MESSAGE .
-    "! Generates a new message from SYMSG
-    "! @parameter message | Message in Format
-    "! @parameter result  | Instance for message
-  class-methods NEW_MESSAGE_FROM_SYMSG
-    importing
-      !MESSAGE type SYMSG
-    returning
-      value(RESULT) type ref to IF_ABAP_BEHV_MESSAGE .
-  PROTECTED SECTION.
+    "! @parameter result   | Message instance
+    CLASS-METHODS new_message
+      IMPORTING !class        TYPE symsgid
+                !number       TYPE symsgno
+                severity      TYPE if_abap_behv_message=>t_severity
+                v1            TYPE simple OPTIONAL
+                v2            TYPE simple OPTIONAL
+                v3            TYPE simple OPTIONAL
+                v4            TYPE simple OPTIONAL
+      RETURNING VALUE(result) TYPE REF TO if_abap_behv_message.
+
+    "! Creates a RAP behavior message from a SYMSG structure. A, X and E map to
+    "! error, W to warning, S to success, I to information.
+    "! @parameter message | Message type, class, number and variables
+    "! @parameter result  | Message instance
+    CLASS-METHODS new_message_from_symsg
+      IMPORTING !message      TYPE symsg
+      RETURNING VALUE(result) TYPE REF TO if_abap_behv_message.
 
   PRIVATE SECTION.
+    CONSTANTS:
+      BEGIN OF c_placeholder_attribute,
+        v1 TYPE scx_attrname VALUE 'IF_T100_DYN_MSG~MSGV1',
+        v2 TYPE scx_attrname VALUE 'IF_T100_DYN_MSG~MSGV2',
+        v3 TYPE scx_attrname VALUE 'IF_T100_DYN_MSG~MSGV3',
+        v4 TYPE scx_attrname VALUE 'IF_T100_DYN_MSG~MSGV4',
+      END OF c_placeholder_attribute.
+
 ENDCLASS.
 
 
+CLASS zcx_cloud_logger_message IMPLEMENTATION.
 
-CLASS ZCX_CLOUD_LOGGER_MESSAGE IMPLEMENTATION.
   METHOD constructor ##ADT_SUPPRESS_GENERATION.
     super->constructor( previous = previous ).
     me->msgty = msgty.
@@ -74,27 +83,27 @@ CLASS ZCX_CLOUD_LOGGER_MESSAGE IMPLEMENTATION.
     me->msgv3 = msgv3.
     me->msgv4 = msgv4.
     CLEAR me->textid.
-    IF textid IS INITIAL.
-      if_t100_message~t100key = if_t100_message=>default_textid.
-    ELSE.
-      if_t100_message~t100key = textid.
-    ENDIF.
+    if_t100_message~t100key = COND #( WHEN textid IS INITIAL
+                                      THEN if_t100_message=>default_textid
+                                      ELSE textid ).
   ENDMETHOD.
 
-
-  METHOD NEW_MESSAGE.
+  METHOD new_message.
     result = NEW zcx_cloud_logger_message(
         textid = VALUE #( msgid = class
                           msgno = number
-                          attr1 = COND #( WHEN v1 IS NOT INITIAL THEN 'IF_T100_DYN_MSG~MSGV1' )
-                          attr2 = COND #( WHEN v2 IS NOT INITIAL THEN 'IF_T100_DYN_MSG~MSGV2' )
-                          attr3 = COND #( WHEN v3 IS NOT INITIAL THEN 'IF_T100_DYN_MSG~MSGV3' )
-                          attr4 = COND #( WHEN v4 IS NOT INITIAL THEN 'IF_T100_DYN_MSG~MSGV4' ) )
+                          attr1 = COND #( WHEN v1 IS NOT INITIAL THEN c_placeholder_attribute-v1 )
+                          attr2 = COND #( WHEN v2 IS NOT INITIAL THEN c_placeholder_attribute-v2 )
+                          attr3 = COND #( WHEN v3 IS NOT INITIAL THEN c_placeholder_attribute-v3 )
+                          attr4 = COND #( WHEN v4 IS NOT INITIAL THEN c_placeholder_attribute-v4 ) )
         msgty  = SWITCH #( severity
-                           WHEN if_abap_behv_message=>severity-error   THEN 'E'
-                           WHEN if_abap_behv_message=>severity-warning THEN 'W'
-                           WHEN if_abap_behv_message=>severity-success THEN 'S'
-                           ELSE                                             'I' )
+                           WHEN if_abap_behv_message=>severity-error
+                             THEN zif_cloud_logger=>c_message_type-error
+                           WHEN if_abap_behv_message=>severity-warning
+                             THEN zif_cloud_logger=>c_message_type-warning
+                           WHEN if_abap_behv_message=>severity-success
+                             THEN zif_cloud_logger=>c_message_type-success
+                           ELSE zif_cloud_logger=>c_message_type-information )
         msgv1  = |{ v1 }|
         msgv2  = |{ v2 }|
         msgv3  = |{ v3 }|
@@ -103,21 +112,27 @@ CLASS ZCX_CLOUD_LOGGER_MESSAGE IMPLEMENTATION.
     result->m_severity = severity.
   ENDMETHOD.
 
-
   METHOD new_message_from_symsg.
-    RETURN new_message( class    = message-msgid
-                        number   = message-msgno
-                        severity = SWITCH #( message-msgty
-                                             WHEN 'A' THEN if_abap_behv_message=>severity-error
-                                             WHEN 'X' THEN if_abap_behv_message=>severity-error
-                                             WHEN 'E' THEN if_abap_behv_message=>severity-error
-                                             WHEN 'W' THEN if_abap_behv_message=>severity-warning
-                                             WHEN 'I' THEN if_abap_behv_message=>severity-information
-                                             WHEN 'S' THEN if_abap_behv_message=>severity-success
-                                             ELSE          if_abap_behv_message=>severity-none )
-                        v1       = message-msgv1
-                        v2       = message-msgv2
-                        v3       = message-msgv3
-                        v4       = message-msgv4 ).
+    result = new_message(
+        class    = message-msgid
+        number   = message-msgno
+        severity = SWITCH #( message-msgty
+                             WHEN zif_cloud_logger=>c_message_type-abandon
+                               OR zif_cloud_logger=>c_message_type-terminate
+                               OR zif_cloud_logger=>c_message_type-error
+                               THEN if_abap_behv_message=>severity-error
+                             WHEN zif_cloud_logger=>c_message_type-warning
+                               THEN if_abap_behv_message=>severity-warning
+                             WHEN zif_cloud_logger=>c_message_type-information
+                               THEN if_abap_behv_message=>severity-information
+                             WHEN zif_cloud_logger=>c_message_type-success
+                               THEN if_abap_behv_message=>severity-success
+                             ELSE if_abap_behv_message=>severity-none )
+        v1       = message-msgv1
+        v2       = message-msgv2
+        v3       = message-msgv3
+        v4       = message-msgv4 ).
   ENDMETHOD.
+
 ENDCLASS.
+

@@ -1,8 +1,14 @@
 "! <p class="shorttext synchronized" lang="en">Cloud Logger Main</p>
-"!
+"! Multiton implementation of {@link zif_cloud_logger} on top of
+"! {@link cl_bali_log}. Instances are shared per object / subobject /
+"! external id and obtained through {@link zcl_cloud_logger.METH:get_instance}.
+"! Environment and database access go through {@link zif_cloud_logger_system}
+"! and {@link zif_cloud_logger_persistence}, so the class is unit-testable
+"! without a clock or a database.
 CLASS zcl_cloud_logger DEFINITION
   PUBLIC
-  CREATE PRIVATE .
+  FINAL
+  CREATE PRIVATE.
 
   PUBLIC SECTION.
     INTERFACES zif_cloud_logger.
@@ -43,37 +49,70 @@ CLASS zcl_cloud_logger DEFINITION
     ALIASES log_messages_type            FOR zif_cloud_logger~log_messages.
     ALIASES rap_messages                 FOR zif_cloud_logger~rap_messages.
 
-    "! <p class="shorttext synchronized">Get or create the multiton logger instance</p>
+    "! <p class="shorttext synchronized" lang="en">Get or create the multiton logger instance</p>
     "!
-    "! <p>Clean ABAP §2366: this factory intentionally exposes > 3 optional
+    "! <p>Clean ABAP rule #2366: this factory intentionally exposes &gt; 3 optional
     "! parameters. They are genuinely independent configuration switches and the
-    "! per-parameter IS SUPPLIED semantics drive the config-conflict detection in
-    "! get_instance; collapsing them into a single structure would lose that
-    "! distinction and break the public API. Documented, accepted deviation.</p>
+    "! per-parameter IS SUPPLIED semantics drive the config-conflict detection;
+    "! collapsing them into a single structure would lose that distinction and
+    "! break the public API. Documented, accepted deviation.</p>
     "!
     "! @parameter enable_emergency_log   | abap_true mirrors every entry via XCO BAL (best-effort)
     "! @parameter object                 | Application Log object (BAL); required when db_save = abap_true
     "! @parameter subobject              | Application Log subobject
     "! @parameter ext_number             | External ID; also part of the multiton key
     "! @parameter db_save                | abap_true persists on save_application_log; abap_false makes save a no-op
-    "! @parameter expiry_date            | Log expiry date (default = today + 5)
+    "! @parameter expiry_date            | Log expiry date (default = today + c_default_expiry_days)
     "! @parameter trim_limit             | Max internal-error trail entries, FIFO (default 100; negative raises)
-    "! @parameter logger_instance        | Shared logger for the object / subobject / ext_number key
+    "! @parameter result                 | Shared logger for the object / subobject / ext_number key
     "! @raising   zcx_cloud_logger_error | Config conflict with an existing instance, or creation failure
     CLASS-METHODS get_instance
-      IMPORTING enable_emergency_log   TYPE abap_boolean                          DEFAULT abap_false
-                !object                TYPE cl_bali_header_setter=>ty_object      OPTIONAL
-                subobject              TYPE cl_bali_header_setter=>ty_subobject   OPTIONAL
-                ext_number             TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
-                db_save                TYPE abap_boolean                          DEFAULT abap_true
-                expiry_date            TYPE xsddate_d                             OPTIONAL
-                trim_limit             TYPE i                                     DEFAULT zif_cloud_logger=>c_default_trim_limit
-      RETURNING VALUE(logger_instance) TYPE REF TO zif_cloud_logger
+      IMPORTING enable_emergency_log TYPE abap_boolean                          DEFAULT abap_false
+                !object              TYPE cl_bali_header_setter=>ty_object      OPTIONAL
+                subobject            TYPE cl_bali_header_setter=>ty_subobject   OPTIONAL
+                ext_number           TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
+                db_save              TYPE abap_boolean                          DEFAULT abap_true
+                expiry_date          TYPE xsddate_d                             OPTIONAL
+                trim_limit           TYPE i DEFAULT zif_cloud_logger=>c_default_trim_limit
+      RETURNING VALUE(result)        TYPE REF TO zif_cloud_logger
       RAISING   zcx_cloud_logger_error.
 
-  PROTECTED SECTION.
+    "! <p class="shorttext synchronized" lang="en">Initialize a logger instance</p>
+    "!
+    "! <p>Public so that CREATE PRIVATE governs instantiation instead of the
+    "! constructor's visibility (Clean ABAP). Mirrors get_instance and shares its
+    "! documented rule #2366 deviation. The two collaborators are optional with
+    "! production defaults: the multiton factory stays unchanged while tests
+    "! (local friends) inject doubles.</p>
+    "!
+    "! @parameter enable_emergency_log   | abap_true mirrors entries via XCO BAL
+    "! @parameter object                 | Application Log object (BAL)
+    "! @parameter subobject              | Application Log subobject
+    "! @parameter ext_number             | External ID for the log
+    "! @parameter db_save                | abap_true persists on save_application_log
+    "! @parameter expiry_date            | Log expiry date (default = today + c_default_expiry_days)
+    "! @parameter trim_limit             | Max internal-error trail entries (FIFO)
+    "! @parameter system                 | Environment access; defaults to {@link zcl_cloud_logger_system}
+    "! @parameter persistence            | Database access; defaults to {@link zcl_cloud_logger_persistence}
+    "! @raising   zcx_cloud_logger_error | Invalid configuration or creation failure
+    METHODS constructor
+      IMPORTING enable_emergency_log TYPE abap_boolean                          DEFAULT abap_false
+                !object              TYPE cl_bali_header_setter=>ty_object      OPTIONAL
+                subobject            TYPE cl_bali_header_setter=>ty_subobject   OPTIONAL
+                ext_number           TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
+                db_save              TYPE abap_boolean                          DEFAULT abap_true
+                expiry_date          TYPE xsddate_d                             OPTIONAL
+                trim_limit           TYPE i DEFAULT zif_cloud_logger=>c_default_trim_limit
+                !system              TYPE REF TO zif_cloud_logger_system        OPTIONAL
+                persistence          TYPE REF TO zif_cloud_logger_persistence   OPTIONAL
+      RAISING   zcx_cloud_logger_error.
+
   PRIVATE SECTION.
     TYPES severity_filter_range TYPE RANGE OF symsgty.
+    TYPES message_class_range   TYPE RANGE OF symsgid.
+    TYPES message_number_range  TYPE RANGE OF symsgno.
+    TYPES message_types         TYPE STANDARD TABLE OF symsgty WITH EMPTY KEY.
+    TYPES free_text_buffer      TYPE c LENGTH 200.
 
     CLASS-DATA logger_instances TYPE logger_instances_type.
 
@@ -92,196 +131,80 @@ CLASS zcl_cloud_logger DEFINITION
     DATA enable_emergency_log TYPE abap_boolean.
     DATA timer_start          TYPE timestampl.
     DATA context              TYPE string.
+    DATA system               TYPE REF TO zif_cloud_logger_system.
+    DATA persistence          TYPE REF TO zif_cloud_logger_persistence.
+    DATA released             TYPE abap_boolean.
 
-    "! <p class="shorttext synchronized">Initialize a logger instance</p>
-    "!
-    "! <p>Clean ABAP §2366: mirrors get_instance and intentionally exposes > 3
-    "! optional parameters. They are genuinely independent configuration
-    "! switches; collapsing them into a single structure would break the
-    "! public factory contract. Documented, accepted deviation.</p>
-    "!
-    "! @parameter enable_emergency_log | abap_true mirrors entries via XCO BAL
-    "! @parameter object               | Application Log object (BAL)
-    "! @parameter subobject            | Application Log subobject
-    "! @parameter ext_number           | External ID for the log
-    "! @parameter db_save              | abap_true persists on save_application_log
-    "! @parameter expiry_date          | Log expiry date (default = today + 5)
-    "! @parameter trim_limit           | Max internal-error trail entries (FIFO)
-    METHODS constructor
-      IMPORTING enable_emergency_log TYPE abap_boolean                          DEFAULT abap_false
-                !object              TYPE cl_bali_header_setter=>ty_object      OPTIONAL
-                subobject            TYPE cl_bali_header_setter=>ty_subobject   OPTIONAL
-                ext_number           TYPE cl_bali_header_setter=>ty_external_id OPTIONAL
-                db_save              TYPE abap_boolean                          DEFAULT abap_true
-                expiry_date          TYPE xsddate_d                             OPTIONAL
-                trim_limit           TYPE i                                     DEFAULT zif_cloud_logger=>c_default_trim_limit
-      RAISING   zcx_cloud_logger_error.
+    " Guards every writing method: a released instance is a caller bug, not a silent no-op
+    METHODS ensure_active
+      RAISING zcx_cloud_logger_error.
 
-    "! <p class="shorttext synchronized">Add Message to Internal Log</p>
-    "!
-    "! @parameter symsg | <p class="shorttext synchronized">IV_MSGV3</p>
-    "! @parameter item  | <p class="shorttext synchronized">Application Log Item Data (e.g. Message; for Writing)</p>
-    METHODS add_message_internal_log
-      IMPORTING symsg      TYPE symsg                      OPTIONAL
-                item       TYPE REF TO if_bali_item_setter OPTIONAL
-                full_text  TYPE string                     OPTIONAL
-                !exception TYPE REF TO cx_root             OPTIONAL.
+    " Adds a prepared entry to the internal log, stamping context, user, date and time
+    METHODS record_entry
+      IMPORTING entry TYPE zif_cloud_logger=>t_log_messages.
 
-    "! <p class="shorttext synchronized">Get Long Text from Message</p>
-    "!
-    "! @parameter symsg     | <p class="shorttext synchronized">IV_MSGV4</p>
-    "! @parameter long_text | <p class="shorttext synchronized">RE_LONG_TEXT</p>
-    CLASS-METHODS get_long_text_from_message
-      IMPORTING symsg            TYPE symsg
-      RETURNING VALUE(long_text) TYPE bapiret2-message.
+    " Resolves the T100 text; never raises, falls back to the raw message components
+    METHODS resolve_message_text
+      IMPORTING symsg         TYPE symsg
+      RETURNING VALUE(result) TYPE string.
 
-    "! <p class="shorttext synchronized">Get String from Message</p>
-    "!
-    "! @parameter message | <p class="shorttext synchronized">Structure of message variables</p>
-    CLASS-METHODS get_string_from_message
-      IMPORTING !message      TYPE symsg
+    " Renders one entry as "[context] TNNN(CLASS) - text" (or the plain text)
+    METHODS render_entry
+      IMPORTING entry         TYPE zif_cloud_logger=>t_log_messages
       RETURNING VALUE(result) TYPE flat_message.
 
-    "! <p class="shorttext synchronized">Safe symsg from free text for RAP fallback</p>
+    " Prefixes the sticky context, if any
+    METHODS apply_context
+      IMPORTING !text         TYPE string
+      RETURNING VALUE(result) TYPE string.
+
+    " Packs free text into the &1&2&3&4 carrier message for RAP consumers
     CLASS-METHODS text_to_symsg
       IMPORTING !text         TYPE string
                 msgty         TYPE symsgty
       RETURNING VALUE(result) TYPE symsg.
 
-    "! <p class="shorttext synchronized">Create Emergency Log</p>
-    METHODS create_emergency_log RAISING zcx_cloud_logger_error.
+    METHODS create_emergency_log
+      RAISING zcx_cloud_logger_error.
 
-    "! <p class="shorttext synchronized">Create Header Object</p>
-    "!
-    "! @parameter header | <p class="shorttext synchronized">Application Log Header Data (for Writing)</p>
+    METHODS recreate_emergency_log.
+
     METHODS create_header
-      RETURNING VALUE(header) TYPE REF TO if_bali_header_setter
+      RETURNING VALUE(result) TYPE REF TO if_bali_header_setter
       RAISING   zcx_cloud_logger_error.
 
-    "! <p class="shorttext synchronized">Get Severity Level of Message Type</p>
-    "!
-    "! @parameter msgty | <p class="shorttext synchronized">Message Type</p>
+    METHODS delete_from_database.
+
+    " Range of severities kept for a minimum severity; empty range = keep everything
     METHODS get_severity_filter
       IMPORTING msgty         TYPE symsgty
-      RETURNING VALUE(filter) TYPE zcl_cloud_logger=>severity_filter_range.
+      RETURNING VALUE(result) TYPE severity_filter_range.
 
-    "! <p class="shorttext synchronized">Mirror message to emergency log via XCO</p>
-    "!
-    "! <p>Best-effort dispatch to the appropriate if_xco_cp_bal_log method based
-    "! on which input is provided. Picks add_exception for exceptions,
-    "! add_message for symsg-based input, add_text for plain strings.
-    "! Failures are swallowed — the emergency log must never break the main flow.</p>
-    "!
-    "! @parameter exception | Optional exception to mirror via add_exception
-    "! @parameter symsg     | Optional symsg-based message to mirror via add_message
-    "! @parameter text      | Optional free-text string to mirror via add_text
+    " Best-effort mirror to the XCO emergency log; picks add_exception, add_message
+    " or add_text depending on the input. Failures go to the internal error trail.
     METHODS mirror_to_emergency_log
       IMPORTING !exception TYPE REF TO cx_root OPTIONAL
                 symsg      TYPE symsg          OPTIONAL
                 !text      TYPE string         OPTIONAL.
 
-    "! <p class="shorttext synchronized">Record a diagnostic entry in the internal error trail</p>
-    "!
-    "! <p>Used by read-only methods to surface swallowed exceptions, and by
-    "! self-logging code paths (e.g. save_application_log no-op) to leave a
-    "! trace without polluting the user-facing log. Either an exception or
-    "! a plain error_text must be supplied.</p>
-    "!
-    "! @parameter method_name | Method that produced the diagnostic
-    "! @parameter exception   | Optional exception (its get_text is used)
-    "! @parameter error_text  | Optional plain text (used when no exception is available)
+    " Records a swallowed problem; either an exception or a plain text is supplied
     METHODS record_internal_error
       IMPORTING method_name TYPE string
                 !exception  TYPE REF TO cx_root OPTIONAL
                 error_text  TYPE string         OPTIONAL.
 
-    "! <p class="shorttext synchronized">Best-effort log_string_add for internal/self-logging</p>
-    "!
-    "! <p>Wraps log_string_add so internal callers (start_timer, stop_timer,
-    "! log_data_add fallback) never propagate logging exceptions to the user.
-    "! On failure, the error is recorded in the internal trail.</p>
-    "!
-    "! @parameter string      | Message text
-    "! @parameter msgty       | Severity (defaults to information)
-    "! @parameter caller_name | Method that requested the safe emit (for diagnostics)
+    " log_string_add for the logger's own diagnostics; never propagates to the caller
     METHODS safe_log_string
       IMPORTING !string     TYPE string
                 msgty       TYPE symsgty DEFAULT c_message_type-information
                 caller_name TYPE string.
 
-    "! <p class="shorttext synchronized">Trim the internal trail to the configured limit (FIFO)</p>
     METHODS trim_internal_errors.
+
 ENDCLASS.
 
 
-
-CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
-
-
-  METHOD add_message_internal_log.
-    DATA(message_text) = COND string(
-      WHEN full_text IS SUPPLIED AND full_text IS NOT INITIAL
-      THEN full_text
-      ELSE CONV string( get_long_text_from_message( symsg ) ) ).
-
-    INSERT VALUE #( item      = item
-                    symsg     = symsg
-                    message   = message_text
-                    type      = symsg-msgty
-                    context   = me->context
-                    user_name = me->user_alias
-                    date      = cl_abap_context_info=>get_system_date( )
-                    time      = cl_abap_context_info=>get_system_time( ) ) INTO TABLE log_messages.
-
-    mirror_to_emergency_log( exception = exception
-                             symsg     = symsg
-                             text      = message_text ).
-
-  ENDMETHOD.
-
-
-  METHOD constructor.
-
-    IF db_save = abap_true AND object IS INITIAL.
-      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>error_in_creation ).
-    ENDIF.
-
-    IF trim_limit < 0.
-      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>error_in_creation ).
-    ENDIF.
-    me->trim_limit = trim_limit.
-    me->user_alias  = cl_abap_context_info=>get_user_alias( ).
-
-    TRY.
-
-        me->log_handle           = cl_bali_log=>create( ).
-        me->object               = object.
-        me->subobject            = subobject.
-        me->ext_number           = ext_number.
-        me->expiry_date          = expiry_date.
-        me->enable_emergency_log = enable_emergency_log.
-
-        TRY.
-            header = create_header( ).
-
-            log_handle->set_header( header ).
-
-          CATCH cx_bali_runtime cx_uuid_error INTO DATA(exception).
-            RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_creation
-                                                        previous = exception ).
-        ENDTRY.
-
-        me->db_save = db_save.
-
-        create_emergency_log( ).
-
-      CATCH cx_bali_runtime cx_uuid_error INTO DATA(exception_new).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_creation
-                                                    previous = exception_new ).
-    ENDTRY.
-
-  ENDMETHOD.
-
+CLASS zcl_cloud_logger IMPLEMENTATION.
 
   METHOD get_instance.
     TRY.
@@ -289,9 +212,9 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                                            log_subobject = subobject
                                            extnumber     = ext_number ].
 
-        " Existing instance found - a non-initial parameter that differs
-        " from the stored value is a configuration conflict. Omitted/initial
-        " parameters mean "no preference" and are therefore compatible.
+        " Existing instance found - a supplied parameter that differs from the
+        " stored value is a configuration conflict. Omitted parameters mean
+        " "no preference" and are therefore compatible.
         DATA(mismatch) = xsdbool(
              (     db_save              IS SUPPLIED
                AND db_save              <> instance-db_save )
@@ -307,20 +230,20 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
           RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>config_mismatch ).
         ENDIF.
 
-        logger_instance = instance-logger.
+        result = instance-logger.
         RETURN.
 
       CATCH cx_sy_itab_line_not_found.
         " no existing instance - fall through to creation
     ENDTRY.
 
-    logger_instance = NEW zcl_cloud_logger( object               = object
-                                            subobject            = subobject
-                                            ext_number           = ext_number
-                                            db_save              = db_save
-                                            enable_emergency_log = enable_emergency_log
-                                            expiry_date          = expiry_date
-                                            trim_limit           = trim_limit ).
+    result = NEW zcl_cloud_logger( object               = object
+                                   subobject            = subobject
+                                   ext_number           = ext_number
+                                   db_save              = db_save
+                                   enable_emergency_log = enable_emergency_log
+                                   expiry_date          = expiry_date
+                                   trim_limit           = trim_limit ).
 
     INSERT VALUE #( log_object           = object
                     log_subobject        = subobject
@@ -329,207 +252,81 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                     enable_emergency_log = enable_emergency_log
                     expiry_date          = expiry_date
                     trim_limit           = trim_limit
-                    logger               = logger_instance ) INTO TABLE logger_instances.
+                    logger               = result ) INTO TABLE logger_instances.
   ENDMETHOD.
 
+  METHOD constructor.
+    DATA effective_system TYPE REF TO zif_cloud_logger_system.
 
-  METHOD get_long_text_from_message.
-
-    RETURN xco_cp=>message( symsg )->get_text( ).
-
-  ENDMETHOD.
-
-
-  METHOD get_string_from_message.
-
-    RETURN |{ message-msgty }{ message-msgno }({ message-msgid }) - { xco_cp=>message( message )->get_text( ) }|.
-
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~get_handle.
-    CHECK log_handle IS BOUND.
-
-    handle = log_handle->get_handle( ).
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~get_log_handle.
-
-    RETURN log_handle.
-
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~get_messages.
-
-    RETURN log_messages.
-
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~get_messages_as_bapiret2.
-
-    RETURN VALUE #( FOR <msg> IN log_messages
-              ( id         = <msg>-symsg-msgid
-                number     = <msg>-symsg-msgno
-                type       = <msg>-symsg-msgty
-                message_v1 = <msg>-symsg-msgv1
-                message_v2 = <msg>-symsg-msgv2
-                message_v3 = <msg>-symsg-msgv3
-                message_v4 = <msg>-symsg-msgv4
-                message    = <msg>-message ) ).
-
-
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~get_messages_flat.
-
-    RETURN VALUE #( FOR msg IN log_messages
-                    ( COND flat_message(
-                        LET base = COND string(
-                            WHEN msg-symsg-msgid IS INITIAL OR msg-symsg-msgno IS INITIAL
-                            THEN |{ msg-message }|
-                            ELSE get_string_from_message( msg-symsg ) )
-                        IN
-                        WHEN msg-context IS NOT INITIAL
-                        THEN |[{ msg-context }] { base }|
-                        ELSE base ) ) ).
-
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~get_messages_rap.
-    result = VALUE #( FOR msg IN log_messages
-                      ( COND #(
-                          WHEN msg-symsg-msgid IS NOT INITIAL AND msg-symsg-msgno IS NOT INITIAL
-                          THEN zcx_cloud_logger_message=>new_message_from_symsg( msg-symsg )
-                          ELSE zcx_cloud_logger_message=>new_message_from_symsg(
-                                   text_to_symsg( text  = msg-message
-                                                  msgty = msg-symsg-msgty ) ) ) ) ).
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~get_message_count.
-
-    IF msgty IS INITIAL.
-      count = lines( log_messages ).
-      RETURN.
+    IF db_save = abap_true AND object IS INITIAL.
+      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>object_required ).
     ENDIF.
-    LOOP AT log_messages TRANSPORTING NO FIELDS WHERE type = msgty.
-      count += 1.
-    ENDLOOP.
 
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~log_bapiret2_structure_add.
-    logger = me.
-
-    IF bapiret2 IS INITIAL OR log_handle IS NOT BOUND.
-      RETURN.
+    IF trim_limit < 0.
+      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>invalid_trim_limit ).
     ENDIF.
+
+    effective_system = COND #( WHEN system IS BOUND
+                               THEN system
+                               ELSE NEW zcl_cloud_logger_system( ) ).
+    me->system      = effective_system.
+    me->persistence = COND #( WHEN persistence IS BOUND
+                              THEN persistence
+                              ELSE NEW zcl_cloud_logger_persistence( ) ).
+
+    me->object               = object.
+    me->subobject            = subobject.
+    me->ext_number           = ext_number.
+    me->expiry_date          = expiry_date.
+    me->enable_emergency_log = enable_emergency_log.
+    me->db_save              = db_save.
+    me->trim_limit           = trim_limit.
+    user_alias               = effective_system->user_name( ).
 
     TRY.
-        DATA(item) = cl_bali_message_setter=>create_from_bapiret2( bapiret2 ).
+        log_handle = cl_bali_log=>create( ).
+        header     = create_header( ).
+        log_handle->set_header( header ).
+
+      CATCH cx_bali_runtime cx_uuid_error INTO DATA(error).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_creation
+                                                    previous = error ).
+    ENDTRY.
+
+    create_emergency_log( ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~log_string_add.
+    self = me.
+    ensure_active( ).
+
+    TRY.
+        DATA(item) = cl_bali_free_text_setter=>create( severity = msgty
+                                                       text     = CONV #( apply_context( string ) ) ).
 
         log_handle->add_item( item ).
 
-        add_message_internal_log( symsg = VALUE #( msgid = bapiret2-id
-                                                   msgno = bapiret2-number
-                                                   msgty = bapiret2-type
-                                                   msgv1 = bapiret2-message_v1
-                                                   msgv2 = bapiret2-message_v2
-                                                   msgv3 = bapiret2-message_v3
-                                                   msgv4 = bapiret2-message_v4 )
-                                  item  = item ).
+        record_entry( VALUE #( symsg   = VALUE #( msgty = msgty )
+                               item    = item
+                               message = string ) ).
 
-      CATCH cx_bali_runtime INTO DATA(exception).
+        mirror_to_emergency_log( text = string ).
+
+      CATCH cx_bali_runtime INTO DATA(error).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
-                                                    previous = exception ).
+                                                    previous = error ).
     ENDTRY.
   ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~log_bapiret2_table_add.
-
-    DATA(severity_filter) = COND #( WHEN min_severity IS NOT INITIAL THEN get_severity_filter( min_severity )
-                                    ELSE VALUE #( ) ).
-
-    LOOP AT bapiret2_t REFERENCE INTO DATA(bapiret2_structure) WHERE type IN severity_filter.
-      log_bapiret2_structure_add( bapiret2_structure->* ).
-    ENDLOOP.
-
-    logger = me.
-
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~log_contains_error.
-
-    result = xsdbool(
-         line_exists( log_messages[ type = c_message_type-error ] )
-      OR line_exists( log_messages[ type = c_message_type-abandon ] )
-      OR line_exists( log_messages[ type = c_message_type-terminate ] ) ).
-
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~log_contains_messages.
-    result = xsdbool( log_messages IS NOT INITIAL ).
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~log_contains_warning.
-
-    result = xsdbool(
-         log_contains_error( ) = abap_true
-      OR line_exists( log_messages[ type = c_message_type-warning ] ) ).
-
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~log_exception_add.
-    logger = me.
-
-    IF exception IS NOT BOUND OR log_handle IS NOT BOUND.
-      RETURN.
-    ENDIF.
-
-    TRY.
-
-        DATA(item) = cl_bali_exception_setter=>create( severity  = severity
-                                                       exception = exception ).
-
-        log_handle->add_item( item ).
-
-        add_message_internal_log( symsg     = VALUE #( msgty = severity )
-                                  item      = item
-                                  full_text = exception->get_text( )
-                                  exception = exception ).
-
-      CATCH cx_bali_runtime INTO DATA(exception_local).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
-                                                    previous = exception_local ).
-    ENDTRY.
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~log_is_empty.
-    result = xsdbool( log_messages IS INITIAL ).
-  ENDMETHOD.
-
 
   METHOD zif_cloud_logger~log_message_add.
-    logger = me.
+    self = me.
+    ensure_active( ).
 
-    IF log_handle IS NOT BOUND.
+    IF symsg IS INITIAL.
       RETURN.
     ENDIF.
 
     TRY.
-
         DATA(item) = cl_bali_message_setter=>create( severity   = symsg-msgty
                                                      id         = symsg-msgid
                                                      number     = symsg-msgno
@@ -540,143 +337,139 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 
         log_handle->add_item( item ).
 
-        add_message_internal_log( symsg = symsg
-                                  item  = item ).
+        record_entry( VALUE #( symsg   = symsg
+                               item    = item
+                               message = resolve_message_text( symsg ) ) ).
 
-      CATCH cx_bali_runtime INTO DATA(exception).
+        mirror_to_emergency_log( symsg = symsg ).
+
+      CATCH cx_bali_runtime INTO DATA(error).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
-                                                    previous = exception ).
+                                                    previous = error ).
     ENDTRY.
   ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~log_string_add.
-    logger = me.
-
-    IF log_handle IS NOT BOUND.
-      RETURN.
-    ENDIF.
-
-    TRY.
-
-        DATA(persisted_text) = COND string( WHEN context IS NOT INITIAL
-                                            THEN |[{ context }] { string }|
-                                            ELSE string ).
-
-        DATA(item) = cl_bali_free_text_setter=>create( severity = msgty
-                                                       text     = CONV #( persisted_text ) ).
-
-        log_handle->add_item( item ).
-
-        add_message_internal_log( symsg     = VALUE #( msgty = msgty )
-                                  item      = item
-                                  full_text = string ).
-
-      CATCH cx_bali_runtime INTO DATA(exception).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
-                                                    previous = exception ).
-    ENDTRY.
-  ENDMETHOD.
-
 
   METHOD zif_cloud_logger~log_syst_add.
-    logger = me.
+    " The system fields are read in exactly one place; an empty SY message is
+    " ignored by log_message_add instead of producing a blank entry.
+    self = log_message_add( system->current_message( ) ).
+  ENDMETHOD.
 
-    IF log_handle IS NOT BOUND.
+  METHOD zif_cloud_logger~log_exception_add.
+    self = me.
+    ensure_active( ).
+
+    IF exception IS NOT BOUND.
       RETURN.
     ENDIF.
 
     TRY.
-
-        DATA(xco_message) = xco_cp=>sy->message( ).
-        DATA(item)        = cl_bali_message_setter=>create_from_sy( ).
+        DATA(item) = cl_bali_exception_setter=>create( severity  = severity
+                                                       exception = exception ).
 
         log_handle->add_item( item ).
 
-        add_message_internal_log( symsg = VALUE #( msgid = xco_message->value-msgid
-                                                   msgno = xco_message->value-msgno
-                                                   msgty = xco_message->value-msgty
-                                                   msgv1 = xco_message->value-msgv1
-                                                   msgv2 = xco_message->value-msgv2
-                                                   msgv3 = xco_message->value-msgv3
-                                                   msgv4 = xco_message->value-msgv4 )
-                                  item  = item ).
+        record_entry( VALUE #( symsg   = VALUE #( msgty = severity )
+                               item    = item
+                               message = exception->get_text( ) ) ).
 
-      CATCH cx_bali_runtime INTO DATA(exception).
+        mirror_to_emergency_log( exception = exception ).
+
+      CATCH cx_bali_runtime INTO DATA(error).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
-                                                    previous = exception ).
+                                                    previous = error ).
     ENDTRY.
   ENDMETHOD.
 
+  METHOD zif_cloud_logger~log_bapiret2_structure_add.
+    self = me.
+    ensure_active( ).
 
-  METHOD zif_cloud_logger~merge_logs.
-    IF external_log IS NOT BOUND OR log_handle IS NOT BOUND.
+    IF bapiret2 IS INITIAL.
       RETURN.
     ENDIF.
 
     TRY.
+        DATA(item)  = cl_bali_message_setter=>create_from_bapiret2( bapiret2 ).
+        DATA(symsg) = VALUE symsg( msgid = bapiret2-id
+                                   msgno = bapiret2-number
+                                   msgty = bapiret2-type
+                                   msgv1 = bapiret2-message_v1
+                                   msgv2 = bapiret2-message_v2
+                                   msgv3 = bapiret2-message_v3
+                                   msgv4 = bapiret2-message_v4 ).
 
-        DATA(external_messages) = external_log->get_messages( ).
-        DATA(external_errors)   = external_log->get_internal_errors( ).
-        DATA(external_handle)   = external_log->get_log_handle( ).
+        log_handle->add_item( item ).
+
+        record_entry( VALUE #( symsg   = symsg
+                               item    = item
+                               message = resolve_message_text( symsg ) ) ).
+
+        mirror_to_emergency_log( symsg = symsg ).
+
+      CATCH cx_bali_runtime INTO DATA(error).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
+                                                    previous = error ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~log_bapiret2_table_add.
+    self = me.
+    ensure_active( ).
+
+    DATA(severity_filter) = get_severity_filter( min_severity ).
+
+    LOOP AT bapiret2_t REFERENCE INTO DATA(bapiret2) WHERE type IN severity_filter.
+      log_bapiret2_structure_add( bapiret2->* ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~log_data_add.
+    self = me.
+    ensure_active( ).
+
+    TRY.
+        log_string_add( string = xco_cp_json=>data->from_abap( data )->to_string( )
+                        msgty  = msgty ).
+
+      CATCH cx_root INTO DATA(error).
+        " Serialization and logging problems must not break the caller's chain;
+        " they are logged as an error entry and, if even that fails, trailed.
+        safe_log_string( string      = |{ TEXT-008 } { error->get_text( ) }|
+                         msgty       = c_message_type-error
+                         caller_name = `log_data_add (fallback emit)` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~merge_logs.
+    self = me.
+    ensure_active( ).
+
+    IF external_log IS NOT BOUND.
+      RETURN.
+    ENDIF.
+
+    TRY.
+        DATA(external_handle) = external_log->get_log_handle( ).
 
         IF external_handle IS BOUND.
           log_handle->add_all_items_from_other_log( external_handle ).
         ENDIF.
-        INSERT LINES OF external_messages INTO TABLE log_messages.
-        INSERT LINES OF external_errors   INTO TABLE internal_errors.
+
+        INSERT LINES OF external_log->get_messages( )        INTO TABLE log_messages.
+        INSERT LINES OF external_log->get_internal_errors( ) INTO TABLE internal_errors.
 
         trim_internal_errors( ).
 
-      CATCH cx_bali_runtime INTO DATA(exception).
+      CATCH cx_bali_runtime INTO DATA(error).
         record_internal_error( method_name = `merge_logs`
-                               exception   = exception ).
+                               exception   = error ).
     ENDTRY.
   ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~reset_appl_log.
-    TRY.
-        IF log_handle IS BOUND AND delete_from_db = abap_true.
-          TRY.
-              cl_bali_log_db=>get_instance( )->delete_log( log_handle ).
-            CATCH cx_bali_runtime INTO DATA(delete_error).
-
-              record_internal_error(
-                method_name = `reset_appl_log (db delete - log not persisted?)`
-                exception   = delete_error ).
-          ENDTRY.
-        ENDIF.
-
-        DATA(new_handle) = cl_bali_log=>create( ).
-        DATA(new_header) = create_header( ).
-        new_handle->set_header( new_header ).
-
-        log_handle = new_handle.
-        header = new_header.
-        CLEAR log_messages.
-        CLEAR: timer_start,
-               context.
-        CLEAR emergency_log.
-        TRY.
-            create_emergency_log( ).
-          CATCH zcx_cloud_logger_error INTO DATA(emerg_error).
-            record_internal_error( method_name = `reset_appl_log (emergency log recreation)`
-                                   exception   = emerg_error ).
-        ENDTRY.
-      CATCH cx_bali_runtime
-            cx_uuid_error INTO DATA(exception).
-
-        record_internal_error( method_name = `reset_appl_log`
-                               exception   = exception ).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_creation
-                                                    previous = exception ).
-    ENDTRY.
-  ENDMETHOD.
-
 
   METHOD zif_cloud_logger~save_application_log.
-    CHECK log_handle IS BOUND.
+    self = me.
+    ensure_active( ).
 
     IF db_save = abap_false.
       " Record the no-op in the internal diagnostic trail. We deliberately do NOT
@@ -712,57 +505,299 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
 *    ENDIF.
 
     TRY.
-        cl_bali_log_db=>get_instance( )->save_log( log                        = log_handle
-                                                   use_2nd_db_connection      = use_2nd_db_connection
-                                                   assign_to_current_appl_job = assign_to_current_appl_job ).
+        persistence->save_log( log                        = log_handle
+                               use_2nd_db_connection      = use_2nd_db_connection
+                               assign_to_current_appl_job = assign_to_current_appl_job ).
 
-      CATCH cx_bali_runtime INTO DATA(exception).
+      CATCH cx_bali_runtime INTO DATA(error).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_release
-                                                    previous = exception ).
+                                                    previous = error ).
     ENDTRY.
   ENDMETHOD.
 
+  METHOD zif_cloud_logger~reset_appl_log.
+    ensure_active( ).
 
-  METHOD zif_cloud_logger~search_message.
-
-    IF search IS INITIAL.
-      RETURN xsdbool( log_messages IS NOT INITIAL ).
+    IF delete_from_db = abap_true.
+      delete_from_database( ).
     ENDIF.
 
-    DATA search_class  TYPE RANGE OF symsgid.
-    DATA search_number TYPE RANGE OF symsgno.
-    DATA search_type   TYPE RANGE OF symsgty.
+    TRY.
+        DATA(new_handle) = cl_bali_log=>create( ).
+        DATA(new_header) = create_header( ).
+        new_handle->set_header( new_header ).
 
-    IF search-msgid IS NOT INITIAL.
-      search_class = VALUE #( ( sign   = c_select_options-sign_include
-                                option = c_select_options-option_equal
-                                low    = search-msgid ) ).
-    ENDIF.
+      CATCH cx_bali_runtime cx_uuid_error INTO DATA(error).
+        record_internal_error( method_name = `reset_appl_log`
+                               exception   = error ).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_creation
+                                                    previous = error ).
+    ENDTRY.
 
-    IF search-msgno IS NOT INITIAL.
-      search_number = VALUE #( ( sign   = c_select_options-sign_include
-                                 option = c_select_options-option_equal
-                                 low    = search-msgno ) ).
-    ENDIF.
+    " Swap only after the new log exists, so a failure above leaves the old log intact
+    log_handle = new_handle.
+    header     = new_header.
+    CLEAR log_messages.
+    CLEAR timer_start.
+    CLEAR context.
+    CLEAR emergency_log.
 
-    IF search-msgty IS NOT INITIAL.
-      search_type = VALUE #( ( sign   = c_select_options-sign_include
-                               option = c_select_options-option_equal
-                               low    = search-msgty ) ).
-    ENDIF.
-
-    LOOP AT log_messages ASSIGNING FIELD-SYMBOL(<msg>)
-         WHERE symsg-msgid IN search_class
-           AND symsg-msgno IN search_number
-           AND symsg-msgty IN search_type.
-      RETURN abap_true.
-    ENDLOOP.
-
+    recreate_emergency_log( ).
   ENDMETHOD.
 
+  METHOD zif_cloud_logger~free.
+    DELETE TABLE logger_instances
+           WITH TABLE KEY log_object    = object
+                          log_subobject = subobject
+                          extnumber     = ext_number.
+
+    released = abap_true.
+    CLEAR log_handle.
+    CLEAR header.
+    CLEAR log_messages.
+    CLEAR emergency_log.
+    CLEAR timer_start.
+    CLEAR context.
+    CLEAR internal_errors.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~get_messages.
+    result = log_messages.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~get_messages_flat.
+    result = VALUE #( FOR msg IN log_messages
+                      ( render_entry( msg ) ) ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~get_messages_as_bapiret2.
+    result = VALUE #( FOR msg IN log_messages
+                      ( id         = msg-symsg-msgid
+                        number     = msg-symsg-msgno
+                        type       = msg-symsg-msgty
+                        message_v1 = msg-symsg-msgv1
+                        message_v2 = msg-symsg-msgv2
+                        message_v3 = msg-symsg-msgv3
+                        message_v4 = msg-symsg-msgv4
+                        message    = msg-message ) ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~get_messages_rap.
+    result = VALUE #( FOR msg IN log_messages
+                      ( COND #( WHEN msg-symsg-msgid IS NOT INITIAL AND msg-symsg-msgno IS NOT INITIAL
+                                THEN zcx_cloud_logger_message=>new_message_from_symsg( msg-symsg )
+                                ELSE zcx_cloud_logger_message=>new_message_from_symsg(
+                                         text_to_symsg( text  = msg-message
+                                                        msgty = msg-symsg-msgty ) ) ) ) ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~get_handle.
+    IF log_handle IS BOUND.
+      result = log_handle->get_handle( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~get_log_handle.
+    result = log_handle.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~get_message_count.
+    result = COND #( WHEN msgty IS INITIAL
+                     THEN lines( log_messages )
+                     ELSE REDUCE int4( INIT count = 0
+                                       FOR msg IN log_messages WHERE ( type = msgty )
+                                       NEXT count = count + 1 ) ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~log_is_empty.
+    result = xsdbool( log_messages IS INITIAL ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~log_contains_messages.
+    result = xsdbool( log_messages IS NOT INITIAL ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~log_contains_error.
+    result = xsdbool(
+         line_exists( log_messages[ type = c_message_type-error ] )
+      OR line_exists( log_messages[ type = c_message_type-abandon ] )
+      OR line_exists( log_messages[ type = c_message_type-terminate ] ) ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~log_contains_warning.
+    result = xsdbool(
+         log_contains_error( ) = abap_true
+      OR line_exists( log_messages[ type = c_message_type-warning ] ) ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~search_message.
+    IF search IS INITIAL.
+      result = xsdbool( log_messages IS NOT INITIAL ).
+      RETURN.
+    ENDIF.
+
+    " An initial search component is not compared: its range stays empty,
+    " and IN <empty range> is true for every line.
+    DATA(class_range)  = COND message_class_range(
+      WHEN search-msgid IS NOT INITIAL
+      THEN VALUE #( ( sign   = c_select_options-sign_include
+                      option = c_select_options-option_equal
+                      low    = search-msgid ) ) ).
+    DATA(number_range) = COND message_number_range(
+      WHEN search-msgno IS NOT INITIAL
+      THEN VALUE #( ( sign   = c_select_options-sign_include
+                      option = c_select_options-option_equal
+                      low    = search-msgno ) ) ).
+    DATA(type_range)   = COND severity_filter_range(
+      WHEN search-msgty IS NOT INITIAL
+      THEN VALUE #( ( sign   = c_select_options-sign_include
+                      option = c_select_options-option_equal
+                      low    = search-msgty ) ) ).
+
+    LOOP AT log_messages TRANSPORTING NO FIELDS
+         WHERE symsg-msgid IN class_range
+           AND symsg-msgno IN number_range
+           AND symsg-msgty IN type_range.
+      result = abap_true.
+      RETURN.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~start_timer.
+    self = me.
+    ensure_active( ).
+
+    IF timer_start IS NOT INITIAL.
+      safe_log_string( string      = CONV #( TEXT-006 )
+                       msgty       = c_message_type-warning
+                       caller_name = `start_timer` ).
+    ENDIF.
+
+    timer_start = system->now( ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~stop_timer.
+    self = me.
+    ensure_active( ).
+
+    IF timer_start IS INITIAL.
+      safe_log_string( string      = CONV #( TEXT-002 )
+                       msgty       = c_message_type-warning
+                       caller_name = `stop_timer` ).
+      RETURN.
+    ENDIF.
+
+    TRY.
+        DATA(elapsed_seconds) = cl_abap_tstmp=>subtract( tstmp1 = system->now( )
+                                                         tstmp2 = timer_start ).
+        DATA(timer_text)      = |{ TEXT-003 } { text } { TEXT-004 } { elapsed_seconds DECIMALS = 3 } { TEXT-005 }|.
+
+        safe_log_string( string      = timer_text
+                         msgty       = c_message_type-information
+                         caller_name = `stop_timer (result emit)` ).
+
+      CATCH cx_parameter_invalid_range cx_parameter_invalid_type.
+        safe_log_string( string      = CONV #( TEXT-001 )
+                         msgty       = c_message_type-error
+                         caller_name = `stop_timer (timer arithmetic)` ).
+    ENDTRY.
+
+    CLEAR timer_start.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~display.
+    IF viewer IS BOUND.
+      viewer->view( me ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~set_context.
+    self        = me.
+    me->context = context.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~clear_context.
+    self = me.
+    CLEAR context.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~get_internal_errors.
+    result = internal_errors.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger~clear_internal_errors.
+    self = me.
+    CLEAR internal_errors.
+  ENDMETHOD.
+
+  METHOD ensure_active.
+    IF released = abap_true.
+      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>instance_released ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD record_entry.
+    INSERT VALUE #( BASE entry
+                    type      = entry-symsg-msgty
+                    context   = context
+                    user_name = user_alias
+                    date      = system->system_date( )
+                    time      = system->system_time( ) ) INTO TABLE log_messages.
+  ENDMETHOD.
+
+  METHOD resolve_message_text.
+    TRY.
+        result = xco_cp=>message( symsg )->get_text( ).
+
+      CATCH cx_root INTO DATA(error).
+        " An unknown or malformed message class must never bring the logger down
+        " (audit #19). Fall back to the raw components and leave a trace. XCO's
+        " exception hierarchy is not narrowed here on purpose - verify in ADT
+        " which cx_xco_* class applies before tightening the CATCH.
+        result = condense( |{ symsg-msgid } { symsg-msgno } { symsg-msgv1 } { symsg-msgv2 }| &&
+                           | { symsg-msgv3 } { symsg-msgv4 }| ).
+        record_internal_error( method_name = `resolve_message_text`
+                               exception   = error ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD render_entry.
+    DATA(base) = COND string(
+      WHEN entry-symsg-msgid IS INITIAL OR entry-symsg-msgno IS INITIAL
+      THEN entry-message
+      ELSE |{ entry-symsg-msgty }{ entry-symsg-msgno }({ entry-symsg-msgid }) - { entry-message }| ).
+
+    result = COND #( WHEN entry-context IS NOT INITIAL
+                     THEN |[{ entry-context }] { base }|
+                     ELSE base ).
+  ENDMETHOD.
+
+  METHOD apply_context.
+    result = COND #( WHEN context IS NOT INITIAL
+                     THEN |[{ context }] { text }|
+                     ELSE text ).
+  ENDMETHOD.
+
+  METHOD text_to_symsg.
+    " symsgv holds 50 characters and message 001 concatenates &1&2&3&4, so the text
+    " is cut into four fixed slices; anything beyond 200 characters is dropped.
+    DATA(buffer) = CONV free_text_buffer( text ).
+
+    result = VALUE #( msgid = zif_cloud_logger=>c_free_text_message-msgid
+                      msgno = zif_cloud_logger=>c_free_text_message-msgno
+                      msgty = COND #( WHEN msgty IS NOT INITIAL
+                                      THEN msgty
+                                      ELSE c_message_type-information )
+                      msgv1 = buffer(50)
+                      msgv2 = buffer+50(50)
+                      msgv3 = buffer+100(50)
+                      msgv4 = buffer+150(50) ).
+  ENDMETHOD.
 
   METHOD create_emergency_log.
-    CHECK enable_emergency_log = abap_true.
+    IF enable_emergency_log = abap_false.
+      RETURN.
+    ENDIF.
 
     DATA(emergency_ext_number) = COND cl_bali_header_setter=>ty_external_id(
       WHEN ext_number IS INITIAL
@@ -774,251 +809,119 @@ CLASS ZCL_CLOUD_LOGGER IMPLEMENTATION.
                                                                    iv_subobject   = subobject
                                                                    iv_external_id = emergency_ext_number ).
 
-      CATCH cx_root INTO DATA(xco_error).
+      CATCH cx_root INTO DATA(error).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_emergency_log
-                                                    previous = xco_error ).
+                                                    previous = error ).
     ENDTRY.
   ENDMETHOD.
 
+  METHOD recreate_emergency_log.
+    TRY.
+        create_emergency_log( ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        record_internal_error( method_name = `reset_appl_log (emergency log recreation)`
+                               exception   = error ).
+    ENDTRY.
+  ENDMETHOD.
 
   METHOD create_header.
+    DATA(effective_expiry) = COND d( WHEN expiry_date IS NOT INITIAL
+                                     THEN expiry_date
+                                     ELSE system->system_date( ) + zif_cloud_logger=>c_default_expiry_days ).
 
     TRY.
-
-        header = cl_bali_header_setter=>create( object      = object
+        result = cl_bali_header_setter=>create( object      = object
                                                 subobject   = subobject
                                                 external_id = ext_number
-                    )->set_expiry( expiry_date       = COND #( WHEN expiry_date IS NOT INITIAL
-                                                               THEN expiry_date
-                                                               ELSE CONV d( cl_abap_context_info=>get_system_date( ) + 5 ) )
+                    )->set_expiry( expiry_date       = effective_expiry
                                    keep_until_expiry = abap_true ).
 
-      CATCH cx_bali_runtime cx_uuid_error INTO DATA(exception).
+      CATCH cx_bali_runtime cx_uuid_error INTO DATA(error).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_creation
-                                                    previous = exception ).
+                                                    previous = error ).
     ENDTRY.
-
   ENDMETHOD.
 
-
-  METHOD zif_cloud_logger~free.
-    DELETE TABLE logger_instances
-           WITH TABLE KEY log_object    = object
-                          log_subobject = subobject
-                          extnumber     = ext_number.
-
-    CLEAR: log_handle,
-           header,
-           log_messages,
-           emergency_log,
-           timer_start,
-           context,
-           internal_errors.
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~log_data_add.
-
+  METHOD delete_from_database.
     TRY.
+        persistence->delete_log( log_handle ).
 
-        DATA(json_string) = xco_cp_json=>data->from_abap( data )->to_string( ).
-
-        log_string_add( string = json_string
-                            msgty  = msgty ).
-
-      CATCH cx_root INTO DATA(error).
-        safe_log_string( string      = |{ TEXT-008 } { error->get_text( ) }|
-                         msgty       = c_message_type-error
-                         caller_name = `log_data_add (fallback emit)` ).
+      CATCH cx_bali_runtime INTO DATA(error).
+        " A log that was never saved cannot be deleted - not fatal for a reset
+        record_internal_error( method_name = `reset_appl_log (db delete - log not persisted?)`
+                               exception   = error ).
     ENDTRY.
-
-    logger = me.
-
   ENDMETHOD.
-
 
   METHOD get_severity_filter.
+    DATA(kept_types) = SWITCH message_types( msgty
+      WHEN c_message_type-abandon OR c_message_type-terminate
+        THEN VALUE #( ( c_message_type-abandon ) ( c_message_type-terminate ) )
+      WHEN c_message_type-error
+        THEN VALUE #( ( c_message_type-error ) ( c_message_type-abandon ) ( c_message_type-terminate ) )
+      WHEN c_message_type-warning
+        THEN VALUE #( ( c_message_type-warning ) ( c_message_type-error )
+                      ( c_message_type-abandon ) ( c_message_type-terminate ) )
+      ELSE VALUE #( ) ).
 
-
-
-    RETURN SWITCH #( msgty
-                       WHEN zif_cloud_logger~c_message_type-abandon OR zif_cloud_logger~c_message_type-terminate
-                       THEN VALUE #( sign   = zcl_cloud_logger=>c_select_options-sign_include
-                                     option = zcl_cloud_logger=>c_select_options-option_equal
-                                    ( low = zif_cloud_logger~c_message_type-abandon )
-                                     ( low = zif_cloud_logger~c_message_type-terminate ) )
-                       WHEN zif_cloud_logger~c_message_type-error
-                       THEN VALUE #( sign   = zcl_cloud_logger=>c_select_options-sign_include
-                                     option = zcl_cloud_logger=>c_select_options-option_equal
-                                   ( low = zif_cloud_logger~c_message_type-error )
-                                   ( low = zif_cloud_logger~c_message_type-abandon )
-                                   ( low = zif_cloud_logger~c_message_type-terminate ) )
-                       WHEN zif_cloud_logger~c_message_type-warning
-                       THEN VALUE #( sign   = zcl_cloud_logger=>c_select_options-sign_include
-                                     option = zcl_cloud_logger=>c_select_options-option_equal
-                                   ( low = zif_cloud_logger~c_message_type-warning )
-                                   ( low = zif_cloud_logger~c_message_type-error )
-                                   ( low = zif_cloud_logger~c_message_type-abandon )
-                                   ( low = zif_cloud_logger~c_message_type-terminate ) )
-                       ELSE VALUE #( ) ).
-
+    result = VALUE #( FOR kept_type IN kept_types
+                      ( sign   = c_select_options-sign_include
+                        option = c_select_options-option_equal
+                        low    = kept_type ) ).
   ENDMETHOD.
 
-
-  METHOD zif_cloud_logger~start_timer.
-
-    IF timer_start IS NOT INITIAL.
-      safe_log_string( string      = CONV #( TEXT-006 )
-                       msgty       = c_message_type-warning
-                       caller_name = `start_timer` ).
-    ENDIF.
-
-    GET TIME STAMP FIELD timer_start.
-    logger = me.
-
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~stop_timer.
-
-    IF timer_start IS INITIAL.
-      safe_log_string( string      = CONV #( TEXT-002 )
-                       msgty       = zif_cloud_logger=>c_message_type-warning
-                       caller_name = `stop_timer` ).
-      logger = me.
+  METHOD mirror_to_emergency_log.
+    IF emergency_log IS NOT BOUND OR enable_emergency_log = abap_false.
       RETURN.
     ENDIF.
 
-    GET TIME STAMP FIELD DATA(now).
-
-    TRY.
-        DATA(diff) = cl_abap_tstmp=>subtract( tstmp1 = now
-                                              tstmp2 = timer_start ).
-
-        safe_log_string( string      = |{ TEXT-003 } { text } { TEXT-004 } { diff DECIMALS = 3 } { TEXT-005 }|
-                         msgty       = zif_cloud_logger=>c_message_type-information
-                         caller_name = `stop_timer (result emit)` ).
-
-        CLEAR timer_start.
-
-      CATCH cx_parameter_invalid_range cx_parameter_invalid_type.
-        safe_log_string( string      = CONV #( TEXT-001 )
-                         msgty       = zif_cloud_logger=>c_message_type-error
-                         caller_name = `stop_timer (timer arithmetic)` ).
-
-        CLEAR timer_start.
-    ENDTRY.
-
-    logger = me.
-
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~display.
-    CHECK viewer IS BOUND.
-    viewer->view( me ).
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~clear_context.
-    CLEAR context.
-    logger = me.
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~set_context.
-    me->context = context.
-    logger = me.
-  ENDMETHOD.
-
-
-  METHOD mirror_to_emergency_log.
-    CHECK emergency_log IS BOUND AND enable_emergency_log = abap_true.
-
     TRY.
         IF exception IS BOUND.
-          emergency_log->add_exception( ix_exception = exception ).
+          emergency_log->add_exception( exception ).
 
         ELSEIF symsg-msgid IS NOT INITIAL.
-          emergency_log->add_message( is_symsg = symsg ).
+          emergency_log->add_message( symsg ).
 
         ELSEIF text IS NOT INITIAL.
-          emergency_log->add_text( io_text = xco_cp=>string( text ) ).
+          emergency_log->add_text( xco_cp=>string( text ) ).
         ENDIF.
 
-      CATCH cx_root INTO DATA(mirror_error).
+      CATCH cx_root INTO DATA(error).
         " Emergency log is best-effort and must never break the main flow,
         " but a silent failure used to be invisible. Record it in the
-        " diagnostic trail so a "all mirrors failed" situation is surfaced.
+        " diagnostic trail so an "all mirrors failed" situation is surfaced.
         record_internal_error( method_name = `mirror_to_emergency_log`
-                               exception   = mirror_error ).
+                               exception   = error ).
     ENDTRY.
   ENDMETHOD.
 
-
   METHOD record_internal_error.
-
-    GET TIME STAMP FIELD DATA(now).
-
-    DATA(text) = COND string( WHEN exception IS BOUND
-                              THEN exception->get_text( )
-                              ELSE error_text ).
-
-    INSERT VALUE #( timestamp  = now
+    INSERT VALUE #( timestamp  = system->now( )
                     method     = method_name
-                    error_text = text ) INTO TABLE internal_errors.
+                    error_text = COND #( WHEN exception IS BOUND
+                                         THEN exception->get_text( )
+                                         ELSE error_text ) ) INTO TABLE internal_errors.
 
     trim_internal_errors( ).
-
   ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~get_internal_errors.
-    RETURN internal_errors.
-  ENDMETHOD.
-
-
-  METHOD zif_cloud_logger~clear_internal_errors.
-    CLEAR internal_errors.
-    logger = me.
-  ENDMETHOD.
-
 
   METHOD safe_log_string.
-
     TRY.
         log_string_add( string = string
                         msgty  = msgty ).
+
       CATCH zcx_cloud_logger_error INTO DATA(error).
         record_internal_error( method_name = caller_name
                                exception   = error ).
     ENDTRY.
-
   ENDMETHOD.
-
 
   METHOD trim_internal_errors.
-
-    IF lines( internal_errors ) > me->trim_limit.
-      DELETE internal_errors FROM 1 TO ( lines( internal_errors ) - me->trim_limit ).
+    IF lines( internal_errors ) > trim_limit.
+      DELETE internal_errors FROM 1 TO ( lines( internal_errors ) - trim_limit ).
     ENDIF.
-
   ENDMETHOD.
 
-
-  METHOD text_to_symsg.
-    DATA buffer TYPE c LENGTH 200.
-
-    buffer = text.                       " auto truncate/pad to 200, never raises
-
-    result = VALUE #( msgid = 'Z_CLOUD_LOGGER'
-                      msgno = '001'
-                      msgty = COND #( WHEN msgty IS NOT INITIAL
-                                      THEN msgty
-                                      ELSE c_message_type-information )
-                      msgv1 = buffer+0(50)
-                      msgv2 = buffer+50(50)
-                      msgv3 = buffer+100(50)
-                      msgv4 = buffer+150(50) ).
-  ENDMETHOD.
 ENDCLASS.
+

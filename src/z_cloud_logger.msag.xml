@@ -49,6 +49,18 @@
      <MSGNR>007</MSGNR>
      <TEXT>Logger instance already exists with a different configuration.</TEXT>
     </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>Z_CLOUD_LOGGER</ARBGB>
+     <MSGNR>008</MSGNR>
+     <TEXT>trim_limit must be zero or a positive number.</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>Z_CLOUD_LOGGER</ARBGB>
+     <MSGNR>009</MSGNR>
+     <TEXT>Logger was released via FREE; request a new one with GET_INSTANCE.</TEXT>
+    </T100>
    </T100>
   </asx:values>
  </asx:abap>

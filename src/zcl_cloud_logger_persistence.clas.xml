@@ -3,23 +3,14 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <VSEOCLASS>
-    <CLSNAME>ZCX_CLOUD_LOGGER_MESSAGE</CLSNAME>
+    <CLSNAME>ZCL_CLOUD_LOGGER_PERSISTENCE</CLSNAME>
     <LANGU>E</LANGU>
-    <DESCRIPT>Cloud Logger RAP message</DESCRIPT>
-    <CATEGORY>40</CATEGORY>
+    <DESCRIPT>Cloud Logger persistence (production)</DESCRIPT>
     <STATE>1</STATE>
     <CLSCCINCL>X</CLSCCINCL>
     <FIXPT>X</FIXPT>
     <UNICODE>5</UNICODE>
-    <RSTAT>K</RSTAT>
    </VSEOCLASS>
-   <DESCRIPTIONS>
-    <SEOCOMPOTX>
-     <CMPNAME>CONSTRUCTOR</CMPNAME>
-     <LANGU>E</LANGU>
-     <DESCRIPT>CONSTRUCTOR</DESCRIPT>
-    </SEOCOMPOTX>
-   </DESCRIPTIONS>
   </asx:values>
  </asx:abap>
 </abapGit>

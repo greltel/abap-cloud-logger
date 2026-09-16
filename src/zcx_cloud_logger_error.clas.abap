@@ -1,81 +1,116 @@
+"! <p class="shorttext synchronized" lang="en">Cloud Logger error</p>
+"! Raised by {@link zcl_cloud_logger} when the logger cannot be created,
+"! configured, written to or saved. The <em>previous</em> exception carries
+"! the original Application Log or XCO error where one exists.
 CLASS zcx_cloud_logger_error DEFINITION
   PUBLIC
   INHERITING FROM cx_static_check
   FINAL
-  CREATE PUBLIC .
+  CREATE PUBLIC.
 
   PUBLIC SECTION.
-
-    INTERFACES if_t100_message .
-    INTERFACES if_t100_dyn_msg .
+    INTERFACES if_t100_message.
+    INTERFACES if_t100_dyn_msg.
 
     CONSTANTS:
-      BEGIN OF error_release ##NEEDED,
+      "! The Application Log could not be saved
+      BEGIN OF error_release,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '002',
         attr1 TYPE scx_attrname VALUE '',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
-      END OF error_release .
+      END OF error_release.
     CONSTANTS:
-      BEGIN OF error_in_creation ##NEEDED,
+      "! The Application Log object could not be created
+      BEGIN OF error_in_creation,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '003',
         attr1 TYPE scx_attrname VALUE '',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
-      END OF error_in_creation .
+      END OF error_in_creation.
     CONSTANTS:
-      BEGIN OF error_in_logging ##NEEDED,
+      "! The Application Log rejected an entry
+      BEGIN OF error_in_logging,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '004',
         attr1 TYPE scx_attrname VALUE '',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
-      END OF error_in_logging .
+      END OF error_in_logging.
     CONSTANTS:
-      BEGIN OF error_in_emergency_log ##NEEDED,
+      "! The XCO emergency log could not be created
+      BEGIN OF error_in_emergency_log,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '005',
         attr1 TYPE scx_attrname VALUE '',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
-      END OF error_in_emergency_log .
+      END OF error_in_emergency_log.
     CONSTANTS:
-      BEGIN OF config_mismatch ##NEEDED,
+      "! db_save = abap_true was requested without an Application Log object
+      BEGIN OF object_required,
+        msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
+        msgno TYPE symsgno VALUE '006',
+        attr1 TYPE scx_attrname VALUE '',
+        attr2 TYPE scx_attrname VALUE '',
+        attr3 TYPE scx_attrname VALUE '',
+        attr4 TYPE scx_attrname VALUE '',
+      END OF object_required.
+    CONSTANTS:
+      "! An instance with the same key exists with a different configuration
+      BEGIN OF config_mismatch,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '007',
         attr1 TYPE scx_attrname VALUE '',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
-      END OF config_mismatch .
+      END OF config_mismatch.
+    CONSTANTS:
+      "! trim_limit must be zero or positive
+      BEGIN OF invalid_trim_limit,
+        msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
+        msgno TYPE symsgno VALUE '008',
+        attr1 TYPE scx_attrname VALUE '',
+        attr2 TYPE scx_attrname VALUE '',
+        attr3 TYPE scx_attrname VALUE '',
+        attr4 TYPE scx_attrname VALUE '',
+      END OF invalid_trim_limit.
+    CONSTANTS:
+      "! The instance was released with free( ) and must not be used any more
+      BEGIN OF instance_released,
+        msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
+        msgno TYPE symsgno VALUE '009',
+        attr1 TYPE scx_attrname VALUE '',
+        attr2 TYPE scx_attrname VALUE '',
+        attr3 TYPE scx_attrname VALUE '',
+        attr4 TYPE scx_attrname VALUE '',
+      END OF instance_released.
 
+    "! @parameter textid   | One of the T100 keys declared above
+    "! @parameter previous | Original exception, if any
     METHODS constructor
-      IMPORTING
-        !textid   LIKE if_t100_message=>t100key OPTIONAL
-        !previous LIKE previous OPTIONAL .
-  PROTECTED SECTION.
+      IMPORTING !textid   LIKE if_t100_message=>t100key OPTIONAL
+                !previous LIKE previous OPTIONAL.
 
-  PRIVATE SECTION.
 ENDCLASS.
-
 
 
 CLASS zcx_cloud_logger_error IMPLEMENTATION.
 
-
   METHOD constructor ##ADT_SUPPRESS_GENERATION.
     super->constructor( previous = previous ).
     CLEAR me->textid.
-    IF textid IS INITIAL.
-      if_t100_message~t100key = if_t100_message=>default_textid.
-    ELSE.
-      if_t100_message~t100key = textid.
-    ENDIF.
+    if_t100_message~t100key = COND #( WHEN textid IS INITIAL
+                                      THEN if_t100_message=>default_textid
+                                      ELSE textid ).
   ENDMETHOD.
+
 ENDCLASS.
+
