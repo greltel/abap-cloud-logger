@@ -2,7 +2,6 @@
   "global": {
     "files": "/src/**/*.*",
     "exclude": [
-      "zcl_cloud_logger_view_alv",
       "zcl_cloud_logger_save_bg"
     ]
   },
