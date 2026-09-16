@@ -63,7 +63,7 @@ CLASS zcl_cloud_logger DEFINITION
     "! @parameter ext_number             | External ID; also part of the multiton key
     "! @parameter db_save                | abap_true persists on save_application_log; abap_false makes save a no-op
     "! @parameter expiry_date            | Log expiry date (default = today + c_default_expiry_days)
-    "! @parameter trim_limit             | Max internal-error trail entries, FIFO (default 100; negative raises)
+    "! @parameter trim_limit             | Max trail entries, FIFO (default 100; 0 = no trail; negative raises)
     "! @parameter result                 | Shared logger for the object / subobject / ext_number key
     "! @raising   zcx_cloud_logger_error | Config conflict with an existing instance, or creation failure
     CLASS-METHODS get_instance
@@ -114,6 +114,16 @@ CLASS zcl_cloud_logger DEFINITION
     TYPES message_types         TYPE STANDARD TABLE OF symsgty WITH EMPTY KEY.
     TYPES free_text_buffer      TYPE c LENGTH 200.
 
+    " Attribute names a T100 key uses for dynamic message variables
+    CONSTANTS:
+      BEGIN OF dyn_msg_attribute,
+        prefix TYPE scx_attrname VALUE 'IF_T100_DYN_MSG~*',
+        v1     TYPE scx_attrname VALUE 'IF_T100_DYN_MSG~MSGV1',
+        v2     TYPE scx_attrname VALUE 'IF_T100_DYN_MSG~MSGV2',
+        v3     TYPE scx_attrname VALUE 'IF_T100_DYN_MSG~MSGV3',
+        v4     TYPE scx_attrname VALUE 'IF_T100_DYN_MSG~MSGV4',
+      END OF dyn_msg_attribute.
+
     CONSTANTS seconds_per_day   TYPE i VALUE 86400.
     " YYYYMMDDhhmmss DIV / MOD this value separates the date from the time part
     CONSTANTS time_part_divisor TYPE i VALUE 1000000.
@@ -138,10 +148,29 @@ CLASS zcl_cloud_logger DEFINITION
     DATA system               TYPE REF TO zif_cloud_logger_system.
     DATA persistence          TYPE REF TO zif_cloud_logger_persistence.
     DATA released             TYPE abap_boolean.
+    DATA effective_expiry     TYPE d.
 
     " Guards every writing method: a released instance is a caller bug, not a silent no-op
     METHODS ensure_active
       RAISING zcx_cloud_logger_error.
+
+    " T100 key and placeholders of an exception; initial when the exception has none
+    METHODS symsg_from_exception
+      IMPORTING !exception    TYPE REF TO cx_root
+                severity      TYPE symsgty
+      RETURNING VALUE(result) TYPE symsg.
+
+    " Value of an exception attribute named in a T100 key, as message variable
+    METHODS attribute_as_variable
+      IMPORTING !exception    TYPE REF TO cx_root
+                attribute     TYPE scx_attrname
+      RETURNING VALUE(result) TYPE symsgv.
+
+    " Variable held in if_t100_dyn_msg (exceptions raised with RAISE ... MESSAGE)
+    METHODS dynamic_message_variable
+      IMPORTING !exception    TYPE REF TO cx_root
+                attribute     TYPE scx_attrname
+      RETURNING VALUE(result) TYPE symsgv.
 
     " Adds a prepared entry to the internal log, stamping context, user, date and time
     METHODS record_entry
@@ -237,7 +266,8 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
                AND trim_limit           <> instance-trim_limit ) ).
 
         IF mismatch = abap_true.
-          RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>config_mismatch ).
+          RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>config_mismatch
+                                                      log_object = object ).
         ENDIF.
 
         result = instance-logger.
@@ -255,12 +285,14 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
                                    expiry_date          = expiry_date
                                    trim_limit           = trim_limit ).
 
+    " The registry keeps the effective expiry, so a later caller who spells out
+    " the default explicitly is not reported as a configuration conflict
     INSERT VALUE #( log_object           = object
                     log_subobject        = subobject
                     extnumber            = ext_number
                     db_save              = db_save
                     enable_emergency_log = enable_emergency_log
-                    expiry_date          = expiry_date
+                    expiry_date          = CAST zcl_cloud_logger( result )->effective_expiry
                     trim_limit           = trim_limit
                     logger               = result ) INTO TABLE logger_instances.
   ENDMETHOD.
@@ -269,11 +301,13 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     DATA effective_system TYPE REF TO zif_cloud_logger_system.
 
     IF db_save = abap_true AND object IS INITIAL.
-      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>object_required ).
+      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>object_required
+                                                  log_object = object ).
     ENDIF.
 
     IF trim_limit < 0.
-      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>invalid_trim_limit ).
+      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>invalid_trim_limit
+                                                  log_object = object ).
     ENDIF.
 
     effective_system = COND #( WHEN system IS BOUND
@@ -299,8 +333,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
         log_handle->set_header( header ).
 
       CATCH cx_bali_runtime cx_uuid_error INTO DATA(error).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_creation
-                                                    previous = error ).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>error_in_creation
+                                                    previous   = error
+                                                    log_object = object ).
     ENDTRY.
 
     create_emergency_log( ).
@@ -323,8 +358,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
         mirror_to_emergency_log( text = string ).
 
       CATCH cx_bali_runtime INTO DATA(error).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
-                                                    previous = error ).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>error_in_logging
+                                                    previous   = error
+                                                    log_object = object ).
     ENDTRY.
   ENDMETHOD.
 
@@ -360,8 +396,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
         mirror_to_emergency_log( symsg = message ).
 
       CATCH cx_bali_runtime INTO DATA(error).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
-                                                    previous = error ).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>error_in_logging
+                                                    previous   = error
+                                                    log_object = object ).
     ENDTRY.
   ENDMETHOD.
 
@@ -385,15 +422,20 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
 
         log_handle->add_item( item ).
 
-        record_entry( VALUE #( symsg   = VALUE #( msgty = severity )
+        " Keep the T100 key so that search, RAP and BAPIRET2 conversions see the
+        " real message instead of free text; the resolved text comes from the
+        " exception itself.
+        record_entry( VALUE #( symsg   = symsg_from_exception( exception = exception
+                                                               severity  = severity )
                                item    = item
                                message = exception->get_text( ) ) ).
 
         mirror_to_emergency_log( exception = exception ).
 
       CATCH cx_bali_runtime INTO DATA(error).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
-                                                    previous = error ).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>error_in_logging
+                                                    previous   = error
+                                                    log_object = object ).
     ENDTRY.
   ENDMETHOD.
 
@@ -424,8 +466,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
         mirror_to_emergency_log( symsg = symsg ).
 
       CATCH cx_bali_runtime INTO DATA(error).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_logging
-                                                    previous = error ).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>error_in_logging
+                                                    previous   = error
+                                                    log_object = object ).
     ENDTRY.
   ENDMETHOD.
 
@@ -528,8 +571,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
                                assign_to_current_appl_job = assign_to_current_appl_job ).
 
       CATCH cx_bali_runtime INTO DATA(error).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_release
-                                                    previous = error ).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>error_release
+                                                    previous   = error
+                                                    log_object = object ).
     ENDTRY.
   ENDMETHOD.
 
@@ -548,8 +592,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
       CATCH cx_bali_runtime cx_uuid_error INTO DATA(error).
         record_internal_error( method_name = `reset_appl_log`
                                exception   = error ).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_creation
-                                                    previous = error ).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>error_in_creation
+                                                    previous   = error
+                                                    log_object = object ).
     ENDTRY.
 
     " Swap only after the new log exists, so a failure above leaves the old log intact
@@ -609,7 +654,7 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
 
   METHOD zif_cloud_logger~get_messages_rap.
     result = VALUE #( FOR msg IN log_messages
-                      ( COND #( WHEN msg-symsg-msgid IS NOT INITIAL AND msg-symsg-msgno IS NOT INITIAL
+                      ( COND #( WHEN msg-symsg-msgid IS NOT INITIAL
                                 THEN zcx_cloud_logger_message=>new_message_from_symsg( msg-symsg )
                                 ELSE zcx_cloud_logger_message=>new_message_from_symsg(
                                          text_to_symsg( text  = msg-message
@@ -750,8 +795,77 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
 
   METHOD ensure_active.
     IF released = abap_true.
-      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid = zcx_cloud_logger_error=>instance_released ).
+      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>instance_released
+                                                  log_object = object ).
     ENDIF.
+  ENDMETHOD.
+
+  METHOD symsg_from_exception.
+    result-msgty = severity.
+
+    " CAST instead of IS INSTANCE OF on purpose: the off-stack runtime does not
+    " evaluate IS INSTANCE OF against interfaces, the cast check it does.
+    TRY.
+        DATA(t100_message) = CAST if_t100_message( exception ).
+      CATCH cx_sy_move_cast_error.
+        RETURN.
+    ENDTRY.
+
+    DATA(t100key) = t100_message->t100key.
+
+    " Only the class decides: message number 000 is a valid number and IS INITIAL for NUMC
+    IF t100key-msgid IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    result-msgid = t100key-msgid.
+    result-msgno = t100key-msgno.
+    result-msgv1 = attribute_as_variable( exception = exception
+                                          attribute = t100key-attr1 ).
+    result-msgv2 = attribute_as_variable( exception = exception
+                                          attribute = t100key-attr2 ).
+    result-msgv3 = attribute_as_variable( exception = exception
+                                          attribute = t100key-attr3 ).
+    result-msgv4 = attribute_as_variable( exception = exception
+                                          attribute = t100key-attr4 ).
+  ENDMETHOD.
+
+  METHOD attribute_as_variable.
+    FIELD-SYMBOLS <value> TYPE any.
+
+    IF attribute IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " Interface attributes are not reachable by dynamic name; the dynamic message
+    " variables are read through their interface instead.
+    IF attribute CP dyn_msg_attribute-prefix.
+      result = dynamic_message_variable( exception = exception
+                                         attribute = attribute ).
+      RETURN.
+    ENDIF.
+
+    " Any other name is a class attribute of the exception; T100 attributes are
+    " elementary by contract - get_text( ) relies on the same.
+    ASSIGN exception->(attribute) TO <value>.
+
+    IF sy-subrc = 0.
+      result = <value>.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD dynamic_message_variable.
+    TRY.
+        DATA(variables) = CAST if_t100_dyn_msg( exception ).
+      CATCH cx_sy_move_cast_error.
+        RETURN.
+    ENDTRY.
+
+    result = SWITCH #( attribute
+                       WHEN dyn_msg_attribute-v1 THEN variables->msgv1
+                       WHEN dyn_msg_attribute-v2 THEN variables->msgv2
+                       WHEN dyn_msg_attribute-v3 THEN variables->msgv3
+                       WHEN dyn_msg_attribute-v4 THEN variables->msgv4 ).
   ENDMETHOD.
 
   METHOD record_entry.
@@ -781,7 +895,7 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
 
   METHOD render_entry.
     DATA(base) = COND string(
-      WHEN entry-symsg-msgid IS INITIAL OR entry-symsg-msgno IS INITIAL
+      WHEN entry-symsg-msgid IS INITIAL
       THEN entry-message
       ELSE |{ entry-symsg-msgty }{ entry-symsg-msgno }({ entry-symsg-msgid }) - { entry-message }| ).
 
@@ -828,12 +942,15 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
                                                                    iv_external_id = emergency_ext_number ).
 
       CATCH cx_root INTO DATA(error).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_emergency_log
-                                                    previous = error ).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>error_in_emergency_log
+                                                    previous   = error
+                                                    log_object = object ).
     ENDTRY.
   ENDMETHOD.
 
   METHOD recreate_emergency_log.
+    " At creation a failing emergency log raises (an explicit request that cannot
+    " be honoured); during a reset it is only trailed so the main log survives.
     TRY.
         create_emergency_log( ).
 
@@ -844,9 +961,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD create_header.
-    DATA(effective_expiry) = COND d( WHEN expiry_date IS NOT INITIAL
-                                     THEN expiry_date
-                                     ELSE system->system_date( ) + zif_cloud_logger=>c_default_expiry_days ).
+    effective_expiry = COND #( WHEN expiry_date IS NOT INITIAL
+                               THEN expiry_date
+                               ELSE system->system_date( ) + zif_cloud_logger=>c_default_expiry_days ).
 
     TRY.
         result = cl_bali_header_setter=>create( object      = object
@@ -856,8 +973,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
                                    keep_until_expiry = abap_true ).
 
       CATCH cx_bali_runtime cx_uuid_error INTO DATA(error).
-        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid   = zcx_cloud_logger_error=>error_in_creation
-                                                    previous = error ).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>error_in_creation
+                                                    previous   = error
+                                                    log_object = object ).
     ENDTRY.
   ENDMETHOD.
 
@@ -961,6 +1079,3 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
-
-
-

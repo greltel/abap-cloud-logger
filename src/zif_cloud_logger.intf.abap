@@ -10,7 +10,7 @@ INTERFACE zif_cloud_logger
   PUBLIC.
 
   "! Library version (semantic versioning).
-  CONSTANTS c_version TYPE string VALUE `2.0.1`.
+  CONSTANTS c_version TYPE string VALUE `2.1.0`.
 
   "! Table of BAPI return structures.
   TYPES bapiret2_messages TYPE STANDARD TABLE OF bapiret2 WITH EMPTY KEY.
@@ -139,6 +139,8 @@ INTERFACE zif_cloud_logger
 
   "! Adds a free-text entry. The active context (see {@link zif_cloud_logger.METH:set_context})
   "! is prefixed to the persisted text; the internal log keeps the text as given.
+  "! The Application Log stores at most 200 characters of free text (prefix included);
+  "! longer texts are cut there, never in the internal log.
   "! @parameter string                 | Text to log (not truncated internally)
   "! @parameter msgty                  | Severity, defaults to warning
   "! @parameter self                   | This logger, for chaining
@@ -168,8 +170,10 @@ INTERFACE zif_cloud_logger
     RAISING   zcx_cloud_logger_error.
 
   "! Adds an exception. The full exception text is kept in the internal log;
-  "! the Application Log receives the exception object itself.
-  "! An unbound reference is ignored.
+  "! the Application Log receives the exception object itself. For exceptions with
+  "! a T100 key ({@link if_t100_message}) the key and its variables are kept, so
+  "! {@link zif_cloud_logger.METH:search_message}, the RAP and the BAPIRET2
+  "! conversions see the real message. An unbound reference is ignored.
   "! @parameter severity               | Severity, defaults to error
   "! @parameter exception              | Exception to log
   "! @parameter self                   | This logger, for chaining
@@ -203,8 +207,9 @@ INTERFACE zif_cloud_logger
     RAISING   zcx_cloud_logger_error.
 
   "! Serializes any data object (elementary, structure, table) to JSON via XCO
-  "! and logs it as free text. Serialization and logging problems are logged as
-  "! an error entry instead of being raised, so a chain is not broken by bad data.
+  "! and logs it as free text (200 characters in the Application Log, complete in
+  "! the internal log). Serialization and logging problems are logged as an error
+  "! entry instead of being raised, so a chain is not broken by bad data.
   "! @parameter data                   | Data object to serialize
   "! @parameter msgty                  | Severity, defaults to warning
   "! @parameter self                   | This logger, for chaining
@@ -295,7 +300,8 @@ INTERFACE zif_cloud_logger
 
   "! Checks whether an entry matches the given message class, number and/or
   "! severity. Initial components are not compared; a completely initial
-  "! search matches any entry.
+  "! search matches any entry. Message number 000 is the initial value of the
+  "! NUMC field and therefore means "any number".
   "! @parameter search | Message key parts to match
   "! @parameter result | abap_true when at least one entry matches
   METHODS search_message
@@ -347,7 +353,8 @@ INTERFACE zif_cloud_logger
     RETURNING VALUE(self) TYPE REF TO zif_cloud_logger.
 
   "! Returns the problems the logger swallowed on purpose (failed emergency
-  "! mirror, no-op save, unresolvable message text, ...). Oldest first.
+  "! mirror, no-op save, unresolvable message text, ...). Oldest first, capped at
+  "! the instance's <em>trim_limit</em>; a trim_limit of 0 switches the trail off.
   "! @parameter result | Internal error trail
   METHODS get_internal_errors
     RETURNING VALUE(result) TYPE internal_errors.

@@ -48,5 +48,3 @@ CLASS zcl_cloud_logger_system IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
-
-

@@ -1,7 +1,8 @@
 "! <p class="shorttext synchronized" lang="en">Cloud Logger error</p>
 "! Raised by {@link zcl_cloud_logger} when the logger cannot be created,
-"! configured, written to or saved. The <em>previous</em> exception carries
-"! the original Application Log or XCO error where one exists.
+"! configured, written to or saved. <em>log_object</em> names the Application
+"! Log object concerned; the <em>previous</em> exception carries the original
+"! Application Log or XCO error where one exists.
 CLASS zcx_cloud_logger_error DEFINITION
   PUBLIC
   INHERITING FROM cx_static_check
@@ -17,7 +18,7 @@ CLASS zcx_cloud_logger_error DEFINITION
       BEGIN OF error_release,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '002',
-        attr1 TYPE scx_attrname VALUE '',
+        attr1 TYPE scx_attrname VALUE 'LOG_OBJECT',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
@@ -27,7 +28,7 @@ CLASS zcx_cloud_logger_error DEFINITION
       BEGIN OF error_in_creation,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '003',
-        attr1 TYPE scx_attrname VALUE '',
+        attr1 TYPE scx_attrname VALUE 'LOG_OBJECT',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
@@ -37,7 +38,7 @@ CLASS zcx_cloud_logger_error DEFINITION
       BEGIN OF error_in_logging,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '004',
-        attr1 TYPE scx_attrname VALUE '',
+        attr1 TYPE scx_attrname VALUE 'LOG_OBJECT',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
@@ -47,7 +48,7 @@ CLASS zcx_cloud_logger_error DEFINITION
       BEGIN OF error_in_emergency_log,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '005',
-        attr1 TYPE scx_attrname VALUE '',
+        attr1 TYPE scx_attrname VALUE 'LOG_OBJECT',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
@@ -57,7 +58,7 @@ CLASS zcx_cloud_logger_error DEFINITION
       BEGIN OF object_required,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '006',
-        attr1 TYPE scx_attrname VALUE '',
+        attr1 TYPE scx_attrname VALUE 'LOG_OBJECT',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
@@ -67,7 +68,7 @@ CLASS zcx_cloud_logger_error DEFINITION
       BEGIN OF config_mismatch,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '007',
-        attr1 TYPE scx_attrname VALUE '',
+        attr1 TYPE scx_attrname VALUE 'LOG_OBJECT',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
@@ -87,17 +88,22 @@ CLASS zcx_cloud_logger_error DEFINITION
       BEGIN OF instance_released,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '009',
-        attr1 TYPE scx_attrname VALUE '',
+        attr1 TYPE scx_attrname VALUE 'LOG_OBJECT',
         attr2 TYPE scx_attrname VALUE '',
         attr3 TYPE scx_attrname VALUE '',
         attr4 TYPE scx_attrname VALUE '',
       END OF instance_released.
 
-    "! @parameter textid   | One of the T100 keys declared above
-    "! @parameter previous | Original exception, if any
+    "! Application Log object the failing logger belongs to (may be initial)
+    DATA log_object TYPE cl_bali_header_setter=>ty_object READ-ONLY.
+
+    "! @parameter textid     | One of the T100 keys declared above
+    "! @parameter previous   | Original exception, if any
+    "! @parameter log_object | Application Log object of the logger concerned
     METHODS constructor
-      IMPORTING !textid   LIKE if_t100_message=>t100key OPTIONAL
-                !previous LIKE previous OPTIONAL.
+      IMPORTING !textid    LIKE if_t100_message=>t100key OPTIONAL
+                !previous  LIKE previous OPTIONAL
+                log_object TYPE cl_bali_header_setter=>ty_object OPTIONAL.
 
 ENDCLASS.
 
@@ -106,6 +112,7 @@ CLASS zcx_cloud_logger_error IMPLEMENTATION.
 
   METHOD constructor ##ADT_SUPPRESS_GENERATION.
     super->constructor( previous = previous ).
+    me->log_object = log_object.
     CLEAR me->textid.
     if_t100_message~t100key = COND #( WHEN textid IS INITIAL
                                       THEN if_t100_message=>default_textid
@@ -113,4 +120,5 @@ CLASS zcx_cloud_logger_error IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
+
 

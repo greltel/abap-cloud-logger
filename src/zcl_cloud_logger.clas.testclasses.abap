@@ -1,3 +1,13 @@
+"! Exception without if_t100_message, to exercise the free-text path
+CLASS lth_plain_failure DEFINITION FINAL FOR TESTING
+  INHERITING FROM cx_static_check.
+ENDCLASS.
+
+
+CLASS lth_plain_failure IMPLEMENTATION.
+ENDCLASS.
+
+
 CLASS ltc_cloud_logger DEFINITION FINAL
   FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
 
@@ -50,6 +60,15 @@ CLASS ltc_cloud_logger DEFINITION FINAL
     METHODS given_stale_free_then_new_kept  FOR TESTING RAISING cx_static_check.
     METHODS when_self_merge_then_unchanged  FOR TESTING RAISING cx_static_check.
     METHODS given_blank_msgty_then_warning  FOR TESTING RAISING cx_static_check.
+    METHODS given_t100_exception_then_key   FOR TESTING RAISING cx_static_check.
+    METHODS given_dyn_exception_then_vars   FOR TESTING RAISING cx_static_check.
+    METHODS given_plain_exception_no_key    FOR TESTING RAISING cx_static_check.
+    METHODS given_free_text_then_rap_wrap   FOR TESTING RAISING cx_static_check.
+    METHODS given_abort_then_contains_err   FOR TESTING RAISING cx_static_check.
+    METHODS when_display_unbound_no_dump    FOR TESTING RAISING cx_static_check.
+    METHODS given_explicit_default_expiry   FOR TESTING RAISING cx_static_check.
+    METHODS given_error_then_object_known   FOR TESTING RAISING cx_static_check.
+    METHODS given_msgno_000_then_t100_kept   FOR TESTING RAISING cx_static_check.
     METHODS given_min_sev_e_then_keeps_2    FOR TESTING RAISING cx_static_check.
     METHODS when_log_data_then_json_entry   FOR TESTING RAISING cx_static_check.
     METHODS given_500_chars_then_kept       FOR TESTING RAISING cx_static_check.
@@ -257,7 +276,7 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
                                           ( message_v1 = 'BAPIS' )
                                           ( message_v1 = 'More' ) ) ).
     cut->log_exception_add( NEW cx_sy_itab_line_not_found( ) ).
-    MESSAGE s003(z_cloud_logger) INTO DATA(dummy) ##NEEDED.
+    MESSAGE s003(z_cloud_logger) WITH 'Z_CLOUD_LOG_SAMPLE' INTO DATA(dummy) ##NEEDED.
     cut->log_syst_add( ).
     cut->log_string_add( `Some freestyle text` ).
 
@@ -435,6 +454,171 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
                                         exp = 1
                                         msg = `Merging a logger into itself must not duplicate entries` ).
+  ENDMETHOD.
+
+  METHOD given_t100_exception_then_key.
+    DATA(failure) = NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>config_mismatch
+                                                log_object = 'ZTEST_OBJECT' ).
+
+    cut->log_exception_add( failure ).
+
+    DATA(messages)    = cut->get_messages( ).
+    DATA(rap)         = cut->get_messages_rap( ).
+    DATA(rap_message) = CAST if_t100_message( rap[ 1 ] ).
+
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-symsg-msgid
+                                        exp = 'Z_CLOUD_LOGGER'
+                                        msg = `The exception's message class must be kept` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-symsg-msgno
+                                        exp = '007'
+                                        msg = `The exception's message number must be kept` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-symsg-msgv1
+                                        exp = 'ZTEST_OBJECT'
+                                        msg = `The attribute named in the T100 key becomes the variable` ).
+    cl_abap_unit_assert=>assert_equals( act = cut->search_message( VALUE #( msgid = 'Z_CLOUD_LOGGER'
+                                                                            msgno = '007' ) )
+                                        exp = abap_true
+                                        msg = `The logged exception must be searchable by its T100 key` ).
+    cl_abap_unit_assert=>assert_equals( act = rap_message->t100key-msgno
+                                        exp = '007'
+                                        msg = `RAP conversion must carry the real T100 key` ).
+  ENDMETHOD.
+
+  METHOD given_dyn_exception_then_vars.
+    DATA(message) = zcx_cloud_logger_message=>new_message( class    = 'CL'
+                                                           number   = '000'
+                                                           severity = if_abap_behv_message=>severity-error
+                                                           v1       = 'first'
+                                                           v2       = 'second' ).
+    DATA(failure) = CAST cx_root( message ).
+
+    cut->log_exception_add( failure ).
+
+    DATA(messages) = cut->get_messages( ).
+
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-symsg-msgv1
+                                        exp = 'first'
+                                        msg = `Variables must be read through the T100 attribute names` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-symsg-msgv2
+                                        exp = 'second'
+                                        msg = `Every filled variable must be kept` ).
+    cl_abap_unit_assert=>assert_initial( act = messages[ 1 ]-symsg-msgv3
+                                         msg = `Unused variables must stay empty` ).
+  ENDMETHOD.
+
+  METHOD given_plain_exception_no_key.
+    DATA(failure) = NEW lth_plain_failure( ).
+
+    cut->log_exception_add( failure ).
+
+    DATA(messages) = cut->get_messages( ).
+
+    cl_abap_unit_assert=>assert_initial( act = messages[ 1 ]-symsg-msgid
+                                         msg = `An exception without T100 key must be logged as free text` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-message
+                                        exp = failure->get_text( )
+                                        msg = `The exception text must be kept` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-type
+                                        exp = 'E'
+                                        msg = `The default severity for exceptions is error` ).
+  ENDMETHOD.
+
+  METHOD given_free_text_then_rap_wrap.
+    DATA(long_text) = repeat( val = `a`
+                              occ = 60 ).
+
+    cut->log_string_add( long_text ).
+
+    DATA(rap)       = cut->get_messages_rap( ).
+    DATA(rap_t100)  = CAST if_t100_message( rap[ 1 ] ).
+    DATA(rap_vars)  = CAST if_t100_dyn_msg( rap[ 1 ] ).
+    DATA(key)       = rap_t100->t100key.
+
+    cl_abap_unit_assert=>assert_equals( act = key-msgid
+                                        exp = zif_cloud_logger=>c_free_text_message-msgid
+                                        msg = `Free text must be wrapped in the carrier message class` ).
+    cl_abap_unit_assert=>assert_equals( act = key-msgno
+                                        exp = zif_cloud_logger=>c_free_text_message-msgno
+                                        msg = `Free text must be wrapped in the carrier message number` ).
+    cl_abap_unit_assert=>assert_equals( act = strlen( rap_vars->msgv1 )
+                                        exp = 50
+                                        msg = `The first placeholder must carry the first 50 characters` ).
+    cl_abap_unit_assert=>assert_equals( act = strlen( rap_vars->msgv2 )
+                                        exp = 10
+                                        msg = `The second placeholder must carry the remainder` ).
+  ENDMETHOD.
+
+  METHOD given_abort_then_contains_err.
+    cut->log_string_add( string = `abort`
+                         msgty  = zif_cloud_logger=>c_message_type-abandon ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->log_contains_error( )
+                                        exp = abap_true
+                                        msg = `Severity A must count as error` ).
+
+    cut->reset_appl_log( ).
+    cut->log_string_add( string = `terminate`
+                         msgty  = zif_cloud_logger=>c_message_type-terminate ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->log_contains_error( )
+                                        exp = abap_true
+                                        msg = `Severity X must count as error` ).
+  ENDMETHOD.
+
+  METHOD when_display_unbound_no_dump.
+    cut->log_string_add( `something to show` ).
+
+    cut->display( VALUE #( ) ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 1
+                                        msg = `display( ) without viewer must be a harmless no-op` ).
+  ENDMETHOD.
+
+  METHOD given_explicit_default_expiry.
+    " Spelling out the default expiry explicitly is the same configuration
+    DATA(default_expiry) = CONV d( cl_abap_context_info=>get_system_date( ) + zif_cloud_logger=>c_default_expiry_days ).
+
+    DATA(same) = zcl_cloud_logger=>get_instance( object      = test_object
+                                                 subobject   = test_subobject
+                                                 expiry_date = default_expiry ).
+
+    cl_abap_unit_assert=>assert_equals( act = same
+                                        exp = cut
+                                        msg = `The effective default expiry must not be reported as a conflict` ).
+  ENDMETHOD.
+
+  METHOD given_error_then_object_known.
+    TRY.
+        zcl_cloud_logger=>get_instance( object    = test_object
+                                        subobject = test_subobject
+                                        db_save   = abap_false ).
+        cl_abap_unit_assert=>fail( `Conflicting db_save must raise` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->log_object
+                                            exp = test_object
+                                            msg = `The exception must name the Application Log object concerned` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_msgno_000_then_t100_kept.
+    " Message number 000 is a valid number; as NUMC it is also IS INITIAL
+    cut->log_message_add( VALUE #( msgty = 'W'
+                                   msgid = 'CL'
+                                   msgno = '000'
+                                   msgv1 = 'zero' ) ).
+
+    DATA(flat)     = cut->get_messages_flat( ).
+    DATA(rap)      = cut->get_messages_rap( ).
+    DATA(rap_t100) = CAST if_t100_message( rap[ 1 ] ).
+
+    cl_abap_unit_assert=>assert_char_cp( act = flat[ 1 ]
+                                         exp = 'W000(CL) - *'
+                                         msg = `Message 000 must render as a T100 message, not as free text` ).
+    cl_abap_unit_assert=>assert_equals( act = rap_t100->t100key-msgid
+                                        exp = 'CL'
+                                        msg = `Message 000 must keep its class in the RAP conversion` ).
   ENDMETHOD.
 
   METHOD given_blank_msgty_then_warning.
@@ -699,7 +883,7 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
     DATA(second) = secondary_logger( '1234' ).
 
     TRY.
-        MESSAGE e005(z_cloud_logger) INTO DATA(dummy) ##NEEDED.
+        MESSAGE e005(z_cloud_logger) WITH 'Z_CLOUD_LOG_SAMPLE' INTO DATA(dummy) ##NEEDED.
         second->log_syst_add( ).
 
         cut->merge_logs( second ).
