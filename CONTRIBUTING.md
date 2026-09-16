@@ -73,8 +73,10 @@ And the other direction — things the system does right that the off-stack runt
   (`DATA(t100) = CAST if_t100_message( x ). ... t100->t100key`), not chained on the cast.
 * `cl_abap_tstmp=>subtract` never raises off-stack and only approximates; the real kernel
   rejected two `timestampl` operands. The logger computes durations itself.
-* Dynamic `ASSIGN oref->('INTF~ATTR')` returns an empty value off-stack; the affected test is
-  skipped in `abap_transpile.json` and runs in ADT.
+
+And one that is neither: a NUMC field with value `000` **is initial** — on the system and
+off-stack alike. Never use `IS INITIAL` on a message number to detect "no message"; check
+the message class.
 
 ## Adding a message or an exception textid
 
