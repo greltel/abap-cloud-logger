@@ -1,0 +1,35 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Library version
+      description: Value of zif_cloud_logger=>c_version
+      placeholder: "2.0.0"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      placeholder: "S/4HANA 2023 FPS03 / BTP ABAP Environment 2409"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Include the exception textid or the short dump if there was one.
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Minimal code to reproduce
+      render: abap
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
