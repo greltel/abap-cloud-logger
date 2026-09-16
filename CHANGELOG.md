@@ -5,6 +5,30 @@ All notable changes to ABAP Cloud Logger are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The installed version is available at
 runtime as `zif_cloud_logger=>c_version`.
 
+## [2.1.0] - 2026-09-16
+
+### Added
+- `zcl_cloud_logger_fake`: in-memory implementation of `zif_cloud_logger` for unit
+  tests of consuming code. Fluent methods return the fake, queries work on what was
+  logged, `save_calls` / `reset_calls` / `released` are exposed, the
+  released-instance contract is mimicked. No Application Log, no database.
+- `log_exception_add( )` keeps the T100 key and variables of exceptions that
+  implement `if_t100_message`, so `search_message( )`, `get_messages_rap( )` and
+  `get_messages_as_bapiret2( )` see the real message instead of free text.
+- `zcx_cloud_logger_error=>log_object` names the Application Log object concerned;
+  messages 002, 003, 004, 005, 007 and 009 show it as `&1`.
+- README: text-length limit of the Application Log, `trim_limit = 0`, high-volume
+  guidance, testing with the fake.
+
+### Fixed
+- `get_instance( )` compares the effective expiry date, so spelling out the
+  default explicitly is no longer reported as `config_mismatch`.
+
+### Changed
+- Emergency-log policy documented: a failure at creation raises (an explicit
+  request that cannot be honoured), a failure during `reset_appl_log( )` is only
+  trailed so the main log survives.
+
 ## [2.0.1] - 2026-09-16
 
 ### Fixed
