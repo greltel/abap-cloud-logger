@@ -21,6 +21,9 @@ runtime as `zif_cloud_logger=>c_version`.
   guidance, testing with the fake.
 
 ### Fixed
+- Messages with number `000` were treated as free text by `get_messages_flat( )`,
+  `get_messages_rap( )` and the exception-key extraction (`000` is the initial
+  value of the NUMC field). The message class alone decides now.
 - `get_instance( )` compares the effective expiry date, so spelling out the
   default explicitly is no longer reported as `config_mismatch`.
 
