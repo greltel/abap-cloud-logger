@@ -4,7 +4,7 @@ Thanks for taking the time. Bug reports, questions and pull requests are all wel
 
 ## Before you start
 
-* The library is **ABAP for Cloud Development** only (except the `gui` sub-package). Use
+* The library is **ABAP for Cloud Development** only. Use
   released APIs; do not read `sy-datum`, `sy-uzeit`, `sy-uname`, do not use `cl_salv_*`,
   `WRITE`, dynpros or function modules.
 * Target release: S/4HANA 2023 (ABAP 7.58) and current SAP BTP ABAP Environment.
