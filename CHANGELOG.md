@@ -23,6 +23,9 @@ runtime as `zif_cloud_logger=>c_version`.
   `zif_cloud_logger` themselves (e.g. test doubles) must rename the assignments.
 - Removed the unused constants `c_message_type-error_pattern` and
   `c_message_type-warning_pattern`.
+- Removed `zcl_cloud_logger_view_alv` (SAP GUI ALV popup, Standard ABAP). The
+  library is ABAP for Cloud Development only; an ALV viewer is a few lines on top
+  of `zif_cloud_logger_viewer` and `get_messages( )` in your own package.
 - `log_syst_add` ignores an empty SY message instead of adding a blank entry.
 
 ### Added
@@ -59,8 +62,6 @@ runtime as `zif_cloud_logger=>c_version`.
 - Off-stack pipeline: full abaplint rule set curated to Clean ABAP (178 rules),
   API snapshot `steampunk-2305-api`, Error-level backstop for non-Cloud `sy`
   fields, Dependabot for the npm toolchain.
-- `zcl_cloud_logger_view_alv` moved to the `gui` sub-package (Standard ABAP); the
-  root package is ABAP for Cloud Development only.
 - README rewritten for 2.0.0; version history moved to this file; CONTRIBUTING.md
   and issue templates added.
 
