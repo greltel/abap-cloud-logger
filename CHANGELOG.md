@@ -5,6 +5,26 @@ All notable changes to ABAP Cloud Logger are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The installed version is available at
 runtime as `zif_cloud_logger=>c_version`.
 
+## [2.0.1] - 2026-09-16
+
+### Fixed
+- `free( )` on a stale reference (after a new instance with the same key was
+  created) no longer removes the new instance from the registry.
+- `merge_logs( )` with the logger itself as input is ignored instead of
+  duplicating every entry.
+- `log_message_add( )` with an initial severity defaults to warning; such entries
+  were invisible to `log_contains_*` and `get_message_count( )`.
+- The merged internal error trail is kept chronological, so trimming evicts the
+  oldest entries.
+- `user_name` in log entries falls back to the technical user name when no alias
+  is maintained (typical on-premise).
+- `c_default_message_attributes-type` is spelled as a literal; the off-stack
+  runtime resolved the previous constant reference to blank, so default-severity
+  behaviour differed between the pipeline and the system.
+
+### Removed
+- Unused text symbol 001 of `zcl_cloud_logger`.
+
 ## [2.0.0] - 2026-09-16
 
 ### Breaking
