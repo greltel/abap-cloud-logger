@@ -1,0 +1,24 @@
+name: Feature request
+description: Propose an addition or a change to the API
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem you are trying to solve
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API or behaviour
+      description: Sketch the call as you would like to write it.
+      render: abap
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Does it change existing behaviour?
+      options:
+        - "No, purely additive"
+        - "Yes, existing callers would have to change"
+        - "Not sure"
