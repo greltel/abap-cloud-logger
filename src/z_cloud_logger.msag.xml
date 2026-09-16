@@ -23,25 +23,25 @@
      <SPRSL>E</SPRSL>
      <ARBGB>Z_CLOUD_LOGGER</ARBGB>
      <MSGNR>002</MSGNR>
-     <TEXT>No access to Application Log, check release state or relation.</TEXT>
+     <TEXT>Application Log &amp;1 could not be saved; check release state or relation.</TEXT>
     </T100>
     <T100>
      <SPRSL>E</SPRSL>
      <ARBGB>Z_CLOUD_LOGGER</ARBGB>
      <MSGNR>003</MSGNR>
-     <TEXT>Log object could not be created</TEXT>
+     <TEXT>Application Log object &amp;1 could not be created.</TEXT>
     </T100>
     <T100>
      <SPRSL>E</SPRSL>
      <ARBGB>Z_CLOUD_LOGGER</ARBGB>
      <MSGNR>004</MSGNR>
-     <TEXT>Error while adding object to Log</TEXT>
+     <TEXT>Application Log &amp;1 rejected the entry.</TEXT>
     </T100>
     <T100>
      <SPRSL>E</SPRSL>
      <ARBGB>Z_CLOUD_LOGGER</ARBGB>
      <MSGNR>005</MSGNR>
-     <TEXT>Error while creating emergency log</TEXT>
+     <TEXT>Emergency log for &amp;1 could not be created.</TEXT>
     </T100>
     <T100>
      <SPRSL>E</SPRSL>
@@ -53,7 +53,7 @@
      <SPRSL>E</SPRSL>
      <ARBGB>Z_CLOUD_LOGGER</ARBGB>
      <MSGNR>007</MSGNR>
-     <TEXT>Logger instance already exists with a different configuration.</TEXT>
+     <TEXT>Logger &amp;1 already exists with a different configuration.</TEXT>
     </T100>
     <T100>
      <SPRSL>E</SPRSL>
@@ -65,7 +65,7 @@
      <SPRSL>E</SPRSL>
      <ARBGB>Z_CLOUD_LOGGER</ARBGB>
      <MSGNR>009</MSGNR>
-     <TEXT>Logger was released via FREE; request a new one with GET_INSTANCE.</TEXT>
+     <TEXT>Logger &amp;1 was released via FREE; request a new one with GET_INSTANCE.</TEXT>
     </T100>
    </T100>
   </asx:values>

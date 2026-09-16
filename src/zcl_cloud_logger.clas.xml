@@ -17,12 +17,6 @@
    <TPOOL>
     <item>
      <ID>I</ID>
-     <KEY>001</KEY>
-     <ENTRY>Error calculating timer duration.</ENTRY>
-     <LENGTH>66</LENGTH>
-    </item>
-    <item>
-     <ID>I</ID>
      <KEY>002</KEY>
      <ENTRY>Timer stopped but never started.</ENTRY>
      <LENGTH>64</LENGTH>
