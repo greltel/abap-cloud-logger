@@ -4,6 +4,7 @@
     "z_cloud_logger.msag",
     "zcl_cloud_logger.clas",
     "zcl_cloud_logger_demo",
+    "zcl_cloud_logger_fake",
     "zcl_cloud_logger_persistence",
     "zcl_cloud_logger_system",
     "zcl_cloud_logger_view_console",
