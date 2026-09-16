@@ -1,6 +1,6 @@
 # ABAP Cloud Logger
 
-[![Version](https://img.shields.io/badge/version-2.0.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue)](CHANGELOG.md)
 [![Tests](https://github.com/greltel/abap-cloud-logger/actions/workflows/test.yml/badge.svg)](https://github.com/greltel/abap-cloud-logger/actions/workflows/test.yml)
 [![ABAP Cloud](https://img.shields.io/badge/ABAP-Cloud%20Ready-green)](https://abaplint.app/stats/greltel/abap-cloud-logger/object_classifications)
 [![Code Statistics](https://img.shields.io/badge/CodeStatistics-abaplint-blue)](https://abaplint.app/stats/greltel/abap-cloud-logger)
@@ -123,6 +123,14 @@ logger->log_data_add( any_structure_or_table ).                          " seria
 
 Initial structures and unbound exceptions are ignored, so chains do not need guards.
 
+Exceptions that carry a T100 key (`if_t100_message`) keep their message class, number and
+variables in the internal log, so `search_message( )`, `get_messages_rap( )` and
+`get_messages_as_bapiret2( )` see the real message rather than free text.
+
+**Text length:** the Application Log stores free text (`log_string_add`, `log_data_add`)
+up to 200 characters, and the `[context] ` prefix counts. Longer texts are cut in the
+persisted log only; `get_messages( )` and `get_messages_flat( )` always return the full text.
+
 ### Sticky context
 
 ```abap
@@ -202,7 +210,16 @@ ENDLOOP.
 logger->clear_internal_errors( ).
 ```
 
-The trail is capped at `trim_limit` entries (default 100, oldest evicted first).
+The trail is capped at `trim_limit` entries (default 100, oldest evicted first);
+`trim_limit = 0` switches the trail off.
+
+### High volume
+
+Every entry is kept twice while the logger lives: as an Application Log item and as a row of
+the internal log (`get_messages( )` copies that table). For jobs that log hundreds of
+thousands of lines, save and reset per batch — `save_application_log( )` then
+`reset_appl_log( )` — instead of holding one log for the whole run, and keep `trim_limit`
+at its default. `get_messages_flat( )` renders every entry, so call it once, not per line.
 
 ## API overview
 
@@ -215,6 +232,7 @@ The trail is capped at `trim_limit` entries (default 100, oldest evicted first).
 | Read | `get_messages`, `get_messages_flat`, `get_messages_as_bapiret2`, `get_messages_rap`, `get_handle`, `get_log_handle` |
 | Persist / show | `save_application_log`, `display( viewer )` |
 | Diagnostics | `get_internal_errors`, `clear_internal_errors`, `zif_cloud_logger=>c_version` |
+| Testing | `zcl_cloud_logger_fake` — in-memory implementation of the interface for consumer tests |
 
 Every public method is documented with ABAP Doc; hover in ADT for parameters and behaviour.
 
@@ -234,7 +252,8 @@ the class constants:
 | `error_in_emergency_log` | 005 | the XCO emergency log could not be created |
 | `instance_released` | 009 | writing method called after `free( )` |
 
-The original `cx_bali_runtime` / XCO exception is chained in `previous`.
+The original `cx_bali_runtime` / XCO exception is chained in `previous`, and `log_object`
+names the Application Log object concerned; the message texts show it as `&1`.
 
 ## Viewers
 
@@ -258,10 +277,30 @@ CLASS zcl_import DEFINITION PUBLIC FINAL CREATE PUBLIC.
 ENDCLASS.
 ```
 
-In the test, `cl_abap_testdouble=>create( 'zif_cloud_logger' )` gives you a double whose
-fluent methods can be configured to return the double itself. The library's own tests show
-the pattern with hand-written doubles for the two internal seams
-(`zif_cloud_logger_system`, `zif_cloud_logger_persistence`).
+In the test, inject `zcl_cloud_logger_fake`: an in-memory implementation of the whole
+interface that never touches the Application Log or the database. Fluent methods return the
+fake, the query methods work on what was logged, saves and resets are counted, and the
+released-instance contract is mimicked.
+
+```abap
+METHOD given_missing_price_then_error_logged.
+  DATA(logger) = NEW zcl_cloud_logger_fake( ).
+  DATA(cut)    = NEW zcl_import( logger ).
+
+  cut->import( order_without_price ).
+
+  cl_abap_unit_assert=>assert_equals( act = logger->zif_cloud_logger~log_contains_error( )
+                                      exp = abap_true
+                                      msg = `A missing price must be logged as error` ).
+  cl_abap_unit_assert=>assert_equals( act = logger->save_calls
+                                      exp = 1
+                                      msg = `The log must be saved once` ).
+ENDMETHOD.
+```
+
+`cl_abap_testdouble=>create( 'zif_cloud_logger' )` works as well when you need to script
+specific return values. The library's own tests show that style with hand-written doubles
+for the two internal seams (`zif_cloud_logger_system`, `zif_cloud_logger_persistence`).
 
 ## Design
 
