@@ -2,10 +2,15 @@
   "input_folder": "src",
   "input_filter": [
     "zcl_cloud_logger.clas",
+    "zcl_cloud_logger_persistence",
+    "zcl_cloud_logger_system",
     "zcl_cloud_logger_view_alv",
     "zcx_cloud_logger_error",
     "zcx_cloud_logger_message",
     "zif_cloud_logger",
+    "zif_cloud_logger_persistence",
+    "zif_cloud_logger_system",
+    "zif_cloud_logger_viewer",
     "z_cloud_logger.msag"
   ],
   "output_folder": "output",
@@ -36,15 +41,9 @@
     "skip": [
       {
         "object": "ZCL_CLOUD_LOGGER",
-        "class": "LTCL_EXTERNAL_METHODS",
-        "method": "CREATE_WRONG_LOG",
+        "class": "LTC_CLOUD_LOGGER",
+        "method": "GIVEN_UNKNOWN_OBJECT_RAISES",
         "note": "open-abap-bal does not yet validate application log objects, APLO"
-      },
-      {
-        "object": "ZCL_CLOUD_LOGGER",
-        "class": "LTCL_EXTERNAL_METHODS",
-        "method": "TEST_LOG_DATA_AS_JSON",
-        "note": "selects from I_CompanyCode, which is unavailable in the transpiler runtime"
       }
     ]
   }
