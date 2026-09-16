@@ -47,6 +47,10 @@ runtime as `zif_cloud_logger=>c_version`.
   rendered instead and the problem is recorded in the internal error trail.
 - Constructor validation errors report their real cause instead of
   "Log object could not be created".
+- Timer duration is computed with plain date/time arithmetic on the UTC time
+  stamps; `cl_abap_tstmp=>subtract` rejected the long stamps with
+  `cx_parameter_invalid_*` on S/4HANA 2023, so `stop_timer` logged
+  "Error calculating timer duration" instead of the duration.
 
 ### Changed
 - Test suite rewritten: behaviour-named tests, `msg` on every assertion, no
