@@ -1,7 +1,7 @@
 # ABAP Cloud Logger
 
 [![Version](https://img.shields.io/badge/version-2.1.0-blue)](CHANGELOG.md)
-[![Tests](https://github.com/greltel/abap-cloud-logger/actions/workflows/test.yml/badge.svg)](https://github.com/greltel/abap-cloud-logger/actions/workflows/test.yml)
+[![Tests](https://github.com/greltel/abap-cloud-logger/actions/workflows/ci.yml/badge.svg)](https://github.com/greltel/abap-cloud-logger/actions/workflows/ci.yml)
 [![ABAP Cloud](https://img.shields.io/badge/ABAP-Cloud%20Ready-green)](https://abaplint.app/stats/greltel/abap-cloud-logger/object_classifications)
 [![Code Statistics](https://img.shields.io/badge/CodeStatistics-abaplint-blue)](https://abaplint.app/stats/greltel/abap-cloud-logger)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
