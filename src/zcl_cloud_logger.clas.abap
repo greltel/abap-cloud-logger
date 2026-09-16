@@ -114,6 +114,10 @@ CLASS zcl_cloud_logger DEFINITION
     TYPES message_types         TYPE STANDARD TABLE OF symsgty WITH EMPTY KEY.
     TYPES free_text_buffer      TYPE c LENGTH 200.
 
+    CONSTANTS seconds_per_day   TYPE i VALUE 86400.
+    " YYYYMMDDhhmmss DIV / MOD this value separates the date from the time part
+    CONSTANTS time_part_divisor TYPE i VALUE 1000000.
+
     CLASS-DATA logger_instances TYPE logger_instances_type.
 
     DATA trim_limit           TYPE i.
@@ -200,6 +204,12 @@ CLASS zcl_cloud_logger DEFINITION
                 caller_name TYPE string.
 
     METHODS trim_internal_errors.
+
+    " Difference of two UTC packed time stamps in seconds, fractions included
+    METHODS seconds_between
+      IMPORTING started_at    TYPE timestampl
+                stopped_at    TYPE timestampl
+      RETURNING VALUE(result) TYPE tzntstmpl.
 
 ENDCLASS.
 
@@ -687,20 +697,13 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    TRY.
-        DATA(elapsed_seconds) = cl_abap_tstmp=>subtract( tstmp1 = system->now( )
-                                                         tstmp2 = timer_start ).
-        DATA(timer_text)      = |{ TEXT-003 } { text } { TEXT-004 } { elapsed_seconds DECIMALS = 3 } { TEXT-005 }|.
+    DATA(elapsed_seconds) = seconds_between( started_at = timer_start
+                                             stopped_at = system->now( ) ).
+    DATA(timer_text)      = |{ TEXT-003 } { text } { TEXT-004 } { elapsed_seconds DECIMALS = 3 } { TEXT-005 }|.
 
-        safe_log_string( string      = timer_text
-                         msgty       = c_message_type-information
-                         caller_name = `stop_timer (result emit)` ).
-
-      CATCH cx_parameter_invalid_range cx_parameter_invalid_type.
-        safe_log_string( string      = CONV #( TEXT-001 )
-                         msgty       = c_message_type-error
-                         caller_name = `stop_timer (timer arithmetic)` ).
-    ENDTRY.
+    safe_log_string( string      = timer_text
+                     msgty       = c_message_type-information
+                     caller_name = `stop_timer (result emit)` ).
 
     CLEAR timer_start.
   ENDMETHOD.
@@ -923,5 +926,25 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD seconds_between.
+    " Both stamps are UTC by definition (GET TIME STAMP), so the packed digits
+    " YYYYMMDDhhmmss.fffffff are split numerically and the parts are subtracted
+    " with plain date/time arithmetic. cl_abap_tstmp=>subtract is not used: it
+    " rejected these long stamps with cx_parameter_invalid_* during the 2.0.0
+    " verification on S/4HANA 2023.
+    DATA(started_whole) = CONV int8( trunc( started_at ) ).
+    DATA(stopped_whole) = CONV int8( trunc( stopped_at ) ).
+
+    DATA(started_date) = CONV d( |{ started_whole DIV time_part_divisor }| ).
+    DATA(stopped_date) = CONV d( |{ stopped_whole DIV time_part_divisor }| ).
+    DATA(started_time) = CONV t( |{ started_whole MOD time_part_divisor WIDTH = 6 PAD = '0' ALIGN = RIGHT }| ).
+    DATA(stopped_time) = CONV t( |{ stopped_whole MOD time_part_divisor WIDTH = 6 PAD = '0' ALIGN = RIGHT }| ).
+
+    result = ( stopped_date - started_date ) * seconds_per_day
+           + ( stopped_time - started_time )
+           + ( frac( stopped_at ) - frac( started_at ) ).
+  ENDMETHOD.
+
 ENDCLASS.
+
 

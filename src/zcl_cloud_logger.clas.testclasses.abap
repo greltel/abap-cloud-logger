@@ -769,6 +769,9 @@ CLASS ltd_fixed_system DEFINITION FINAL FOR TESTING.
     CONSTANTS fixed_user TYPE syuname VALUE 'TESTUSER'.
     CONSTANTS first_now  TYPE timestampl VALUE '20260916101500.0000000'.
     CONSTANTS second_now TYPE timestampl VALUE '20260916101502.0000000'.
+    "! Half a second before midnight and one second after, for the day-boundary test
+    CONSTANTS before_midnight TYPE timestampl VALUE '20260916235959.5000000'.
+    CONSTANTS after_midnight  TYPE timestampl VALUE '20260917000001.0000000'.
 
     TYPES time_stamps TYPE STANDARD TABLE OF timestampl WITH EMPTY KEY.
 
@@ -907,6 +910,7 @@ CLASS ltc_cloud_logger_isolated DEFINITION FINAL
 
     METHODS given_fixed_env_then_stamped    FOR TESTING RAISING cx_static_check.
     METHODS given_2s_clock_then_timer_text    FOR TESTING RAISING cx_static_check.
+    METHODS given_midnight_clock_then_1_5   FOR TESTING RAISING cx_static_check.
     METHODS given_trail_then_fixed_stamp    FOR TESTING RAISING cx_static_check.
     METHODS given_sy_message_then_logged    FOR TESTING RAISING cx_static_check.
     METHODS given_no_sy_message_ignored     FOR TESTING RAISING cx_static_check.
@@ -977,14 +981,25 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( act = lines( flat )
                                         exp = 1
                                         msg = `stop_timer must log exactly one entry` ).
+    " '+' matches the decimal separator of the executing user's format settings
     cl_abap_unit_assert=>assert_char_cp( act = flat[ 1 ]
-                                         exp = '*Block A took *seconds*'
-                                         msg = `Timer entry must carry label and duration` ).
-    " Both time stamps consumed = start and stop were taken from the injected
-    " clock, not from GET TIME STAMP. The exact "2.000" is not asserted because
-    " the off-stack cl_abap_tstmp=>subtract only approximates the difference.
+                                         exp = '*Block A took 2+000 seconds*'
+                                         msg = `Elapsed time must be computed from the injected time stamps` ).
     cl_abap_unit_assert=>assert_initial( act = system->queued_stamps
                                          msg = `start_timer and stop_timer must each read the injected clock once` ).
+  ENDMETHOD.
+
+  METHOD given_midnight_clock_then_1_5.
+    system->queue_stamps( VALUE #( ( ltd_fixed_system=>before_midnight )
+                                   ( ltd_fixed_system=>after_midnight ) ) ).
+
+    cut->start_timer( )->stop_timer( `Night run` ).
+
+    DATA(flat) = cut->get_messages_flat( ).
+
+    cl_abap_unit_assert=>assert_char_cp( act = flat[ 1 ]
+                                         exp = '*Night run took 1+500 seconds*'
+                                         msg = `Elapsed time must be correct across a day boundary` ).
   ENDMETHOD.
 
   METHOD given_trail_then_fixed_stamp.

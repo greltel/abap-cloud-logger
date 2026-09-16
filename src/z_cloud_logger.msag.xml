@@ -46,6 +46,12 @@
     <T100>
      <SPRSL>E</SPRSL>
      <ARBGB>Z_CLOUD_LOGGER</ARBGB>
+     <MSGNR>006</MSGNR>
+     <TEXT>Application Log object is required when db_save is enabled.</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>Z_CLOUD_LOGGER</ARBGB>
      <MSGNR>007</MSGNR>
      <TEXT>Logger instance already exists with a different configuration.</TEXT>
     </T100>
