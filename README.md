@@ -1,269 +1,318 @@
 # ABAP Cloud Logger
-# ✅ Status: Release (v1.6.0)
-> **Open Source Contribution:** This project is community-driven and **Open Source**! 🚀  
-> If you spot a bug or have an idea for a cool enhancement, your contributions are more than welcome. Feel free to open an **Issue** or submit a **Pull Request**.
 
-![Version](https://img.shields.io/badge/version-1.6.0-blue) 
+[![Version](https://img.shields.io/badge/version-2.0.0-blue)](CHANGELOG.md)
+[![Tests](https://github.com/greltel/abap-cloud-logger/actions/workflows/test.yml/badge.svg)](https://github.com/greltel/abap-cloud-logger/actions/workflows/test.yml)
 [![ABAP Cloud](https://img.shields.io/badge/ABAP-Cloud%20Ready-green)](https://abaplint.app/stats/greltel/abap-cloud-logger/object_classifications)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/greltel/ABAP-Cloud-Logger/blob/main/LICENSE)
-[![ABAP 7.00+](https://img.shields.io/badge/ABAP-7.58%2B-brightgreen)](https://abaplint.app/stats/greltel/abap-cloud-logger/statement_compatibility)
 [![Code Statistics](https://img.shields.io/badge/CodeStatistics-abaplint-blue)](https://abaplint.app/stats/greltel/abap-cloud-logger)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-# Table of contents
-1. [ABAP Cloud Logger](#ABAP-Cloud-Logger)
-2. [Prerequisites](#Prerequisites)
-3. [License](#License)
-4. [Contributors-Developers](#Contributors-Developers)
-5. [Motivation for Creating the Repository](#Motivation-for-Creating-the-Repository)
-6. [Usage Examples](#Usage-Examples)
-7. [Design Goals-Features](#Design-Goals-Features)
-8. [Changelog](#Changelog)
-9. [Roadmap](#Roadmap)
-
-# ABAP-Cloud-Logger
-ABAP Logger Following Clean Core Principles.ABAP Cloud Logger is a modern, lightweight, and Clean Core-compliant logging library for SAP S/4HANA and SAP BTP ABAP Environment.
-It acts as a fluent wrapper around the standard class `CL_BALI_LOG`, simplifying the Application Log API while ensuring strict adherence to **ABAP Cloud** development standards.
-
-# Prerequisites
-
-* SAP S/4HANA 2023 (or higher) OR SAP BTP ABAP Environment.
-* XCO library availability
-* Statement Compatibility from v758 and Cloud
-
-## License
-This project is licensed under the [MIT License](https://github.com/greltel/ABAP-Cloud-Logger/blob/main/LICENSE).
-
-## Contributors-Developers
-The repository was created by [George Drakos](https://www.linkedin.com/in/george-drakos/).
-
-## Motivation for Creating the Repository
-
-Logging is a tool I rely on almost every day while working with ABAP. I wanted to create a version that is not only simple and effective but also fully compatible with the ABAP Cloud environment. 
-The goal is to provide an easy-to-use logger that fits naturally into cloud-ready development practices and can be integrated seamlessly into modern projects.
-
-## Usage Examples
-
-### 1. Initialization
-To start logging, get an instance of the logger by providing your Application Log Object and Subobject (defined in Eclipse as Application Log Object).
+A fluent, unit-tested logging library for **ABAP for Cloud Development** (SAP S/4HANA Cloud,
+SAP BTP ABAP Environment, S/4HANA on-premise with ABAP Cloud). It wraps the released
+Application Log API (`cl_bali_log`) and adds the things you end up writing yourself every
+time: chaining, an in-memory copy of the log, conversions to BAPIRET2 and RAP messages,
+sticky context, a stopwatch, and a trail of the problems the logger itself swallowed.
 
 ```abap
-DATA(logger) = zcl_cloud_logger=>get_instance( object    = 'Z_CLOUD_LOG_SAMPLE'
-                                               subobject = 'SETUP' ).
+DATA(logger) = zcl_cloud_logger=>get_instance( object    = 'ZMYAPP'
+                                               subobject = 'IMPORT' ).
+
+logger->set_context( |Order { order_id }|
+  )->log_string_add( `Validation started`
+  )->log_bapiret2_table_add( bapiret2_t   = bapi_return
+                             min_severity = zif_cloud_logger=>c_message_type-warning
+  )->log_exception_add( import_error
+  )->clear_context(
+  )->save_application_log( ).
 ```
 
-### 2. Exception Add
+## Contents
+
+1. [Why not `cl_bali_log` directly?](#why-not-cl_bali_log-directly)
+2. [Requirements](#requirements)
+3. [Installation](#installation)
+4. [Quick start](#quick-start)
+5. [Usage](#usage)
+6. [API overview](#api-overview)
+7. [Errors](#errors)
+8. [Viewers](#viewers)
+9. [Testing code that uses the logger](#testing-code-that-uses-the-logger)
+10. [Design](#design)
+11. [Development](#development)
+12. [Changelog and roadmap](#changelog-and-roadmap)
+13. [License and author](#license-and-author)
+
+## Why not `cl_bali_log` directly?
+
+`cl_bali_log` is the right foundation and this library never hides it (`get_log_handle( )`
+returns the `if_bali_log` object). What it adds:
+
+| You want to | With `cl_bali_log` alone | With ABAP Cloud Logger |
+|---|---|---|
+| Share one log across classes of a process | pass the handle around | `get_instance( )` returns the same instance for the same object / subobject / external id |
+| Log a string, a T100 message, `sy-msg*`, an exception, a BAPIRET2 table, any data as JSON | one setter class each, no filtering | one `log_*` method each, chainable, BAPIRET2 severity filter |
+| Read back what was logged | `get_all_items( )` and unpack setters | `get_messages( )`, `get_messages_flat( )`, `get_messages_as_bapiret2( )`, `get_messages_rap( )` |
+| Ask "did anything fail?" | loop over items | `log_contains_error( )`, `get_message_count( 'E' )`, `search_message( )` |
+| Tag entries with the document being processed | build the text yourself | `set_context( )` / `clear_context( )` |
+| Know that a save or a mirror silently failed | you don't | `get_internal_errors( )` |
+| Unit-test the code that logs | mock `if_bali_log` | mock the small `zif_cloud_logger` interface |
+
+## Requirements
+
+* SAP S/4HANA 2023 or higher, SAP S/4HANA Cloud, or SAP BTP ABAP Environment
+* ABAP language version *ABAP for Cloud Development* (all objects except the optional GUI viewer)
+* Released APIs only: `cl_bali_log`, `cl_bali_log_db`, `cl_abap_context_info`, XCO
+
+## Installation
+
+1. Pull the repository with [abapGit](https://abapgit.org) into a package of your choice.
+   The repository uses *prefix* folder logic; the optional `gui` folder becomes the
+   sub-package `<your package>_GUI`.
+2. The Application Log object `Z_CLOUD_LOG_SAMPLE` (sub-object `SETUP`) ships with the
+   repository and is used by the tests and the demo. For your own logs create an Application
+   Log object in the *Maintain Application Log Object* app (Fiori) or `SLG0` (on-premise).
+   `db_save = abap_true` requires an object; `db_save = abap_false` works without one.
+3. Run the ABAP Unit tests of `zcl_cloud_logger` and `zcl_cloud_logger_view_console`.
+
+**SAP BTP ABAP Environment:** the `gui` sub-package contains `zcl_cloud_logger_view_alv`,
+which needs SAP GUI classes and cannot be activated there. Everything else is ABAP for Cloud
+Development. Use the console viewer or your own `zif_cloud_logger_viewer` implementation.
+
+## Quick start
+
+Run `zcl_cloud_logger_demo` with **F9** in ADT. It logs a small process (context, T100
+message, filtered BAPIRET2 table, exception, JSON data, timer) and prints the result on the
+console without persisting anything.
+
+## Usage
+
+Every `log_*` method returns the logger, so calls chain. Every writing method raises
+`zcx_cloud_logger_error`; wrap the logging block once instead of every call.
+
+### Get an instance
 
 ```abap
-TRY.
-    " Your business logic here
-    DATA(result) = 100 / 0.
-
-  CATCH cx_sy_zerodivide INTO DATA(error).
-    " Pass the exception object to the logger
-    logger->log_exception_add( error ).
-ENDTRY.
+DATA(logger) = zcl_cloud_logger=>get_instance(
+    object               = 'ZMYAPP'          " Application Log object (required when db_save = abap_true)
+    subobject            = 'IMPORT'
+    ext_number           = |{ run_id }|      " part of the instance key
+    db_save              = abap_true         " abap_false: save_application_log( ) is a no-op
+    expiry_date          = CONV #( cl_abap_context_info=>get_system_date( ) + 30 )
+    enable_emergency_log = abap_false        " abap_true mirrors every entry via XCO BAL (best effort)
+    trim_limit           = 100 ).            " cap of the internal error trail
 ```
 
-### 3. Message Add
+The same object / subobject / external id always returns the same instance. Supplying a
+different `db_save`, `expiry_date`, `trim_limit` or `enable_emergency_log` for an existing
+instance raises `config_mismatch`; omitting a parameter means "no preference".
+
+### Add entries
 
 ```abap
-logger->log_message_add( symsg = VALUE #( msgty = 'W'
-                                           msgid = 'CL'
-                                           msgno = '000'
-                                           msgv1 = 'Test Message' ) ).
-```
-                            
-### 4. String Add
+logger->log_string_add( `Free text` ).                                   " default severity W
+logger->log_string_add( string = `Failed`  msgty = zif_cloud_logger=>c_message_type-error ).
 
-```abap
-logger->log_string_add( string = 'String Add'
-                        msgty  = 'E'  ).
-```
-### 5. BAPIRET2 Structure and Table Add with Smart Filtering
+logger->log_message_add( VALUE #( msgty = 'E' msgid = 'ZMYAPP' msgno = '001' msgv1 = order_id ) ).
 
-```abap
-logger->log_bapiret2_table_add( 
-    bapiret2_t   = return
-    min_severity = 'E' ).
+MESSAGE e002(zmyapp) WITH order_id INTO DATA(dummy) ##NEEDED.
+logger->log_syst_add( ).                                                 " takes sy-msg*
 
-logger->log_bapiret2_structure_add( VALUE #( ) ) .
-```
+logger->log_exception_add( exception ).                                  " default severity E
+logger->log_exception_add( exception = exception  severity = 'W' ).
 
-### 6. Advanced Data Logging (JSON)
+logger->log_bapiret2_structure_add( bapiret2 ).
+logger->log_bapiret2_table_add( bapiret2_t   = bapiret2_table
+                                min_severity = 'E' ).                    " keeps E, A, X
 
-```abap
-SELECT * FROM i_companycode INTO TABLE @DATA(company_codes) UP TO 10 ROWS.
-
-" Log the whole table as JSON
-logger->log_data_add( company_codes ).
+logger->log_data_add( any_structure_or_table ).                          " serialized to JSON via XCO
 ```
 
-### 7. Get Messages
+Initial structures and unbound exceptions are ignored, so chains do not need guards.
+
+### Sticky context
 
 ```abap
-DATA(message_count)     = logger->get_message_count( ).
-
-DATA(messages_bapiret2) = logger->get_messages_as_bapiret2( ).
-
-DATA(messages)          = logger->get_messages( ).
-
-DATA(messages_flat)     = logger->get_messages_flat( ).
-
-DATA(messages_rap)      = logger->get_messages_rap( ).
-```
-
-### 8. Functional Methods
-
-```abap
-DATA(error_exists)   = logger->log_contains_error( ).
-
-DATA(messages_exist) = logger->log_contains_messages( ).
-
-DATA(warning_exists) = logger->log_contains_warning( ).
-
-DATA(is_empty)       = logger->log_is_empty( ).
-```
-
-### 9. Get Log Handle
-
-```abap
-DATA(handle)         = logger->get_handle( ).
-
-DATA(log_handle)     = logger->get_log_handle( ).
-```
-
-### 10. Save Application Log
-
-```abap
-logger->save_application_log( ).
-```
-
-### 11. Search for a Specific Message
-
-```abap
-data(specific_message_exists) = logger->search_message( search = VALUE #( msgid = '00' ) ).
-```
-
-### 12. Merge Logs
-
-```abap
-"Get a New Log Instance
-DATA(new_logger) = zcl_cloud_logger=>get_instance( object    = 'Z_MY_OBJECT_NEW'
-                                                    subobject = 'Z_MY_SUBOBJECT_NEW' ).
-
-"Add Message
-new_logger->log_string_add( string = 'New Logger String'
-                            msgty  = 'E'  ).
-
-"Merge with Previous Log
-logger->merge_logs( new_logger ).
-```
-
-### 13. Reset Log
-
-```abap
-logger->reset_appl_log( delete_from_db = abap_true ).
-```
-
-### 14. Timer
-
-```abap
-" 1. Start the stopwatch
-logger->start_timer( ).
-
-" 2. Execute a code block
-"SELECT FROM.....
-
-" 3. Stop and log the duration automatically
-logger->stop_timer( 'Test Timer' ).
-```
-
-### 14. Viewer
-
-```abap
-logger->display( NEW zcl_cloud_logger_view_alv( ) ).
-```
-
-### 15. Sticky Tags
-
-```abap
-logger->set_context( 'Order 100' ).
-logger->log_string_add( 'Price checked' )."[Order 100] Price checked logged
+logger->set_context( `Order 4711` ).
+logger->log_string_add( `Price checked` ).      " persisted as "[Order 4711] Price checked"
 logger->clear_context( ).
 ```
 
-## Design Goals-Features
+### Timer
 
-* Install via [ABAPGit](http://abapgit.org)
-* ABAP Cloud/Clean Core compatibility.Passed SCI check variant S4HANA_READINESS_2023 and ABAP_CLOUD_READINESS/SAP_CP_READINESS
-* Clean Code following [Clean ABAP Style Guides](https://github.com/SAP/styleguides/blob/main/clean-abap/CleanABAP.md)
-* Based on [CL_BALI_LOG](https://help.sap.com/docs/btp/sap-business-technology-platform/cl-bali-log-interface-if-bali-log) which is released for Cloud Development (could also use XCO_CP_BAL)
-* Based on Multiton Design Pattern for efficient management of log instances
-* Unit Tested
-* Fluent Interface and method chaining
-* Separate logging from viewing using the Strategy Pattern
+```abap
+logger->start_timer( ).
+" ... work ...
+logger->stop_timer( `Pricing` ).                " logs "Timer Result: Pricing took 0.421 seconds."
+```
 
-## Changelog
+### Read the log
 
-### [1.6.0] - 2026-04-26
-#### Added
- * Internal error trail — new get_internal_errors() and clear_internal_errors() expose previously swallowed cx_bali_runtime exceptions. Bounded to 100 entries with FIFO     eviction.
- * Strict singleton validation — get_instance now raises zcx_cloud_logger_error on conflicting config instead of silently returning a mismatched instance.
- * save_application_log no-op feedback — logs a warning when called with db_save = abap_false.
- * start_timer double-call detection — warns when called twice without a stop_timer in between.
- * Sticky context across all logging methods — set_context() now applies to every entry point, not only free-text.
+```abap
+IF logger->log_contains_error( ).             " E, A or X present
+  ...
+ENDIF.
 
-#### Fixed
+DATA(errors)   = logger->get_message_count( zif_cloud_logger=>c_message_type-error ).
+DATA(found)    = logger->search_message( VALUE #( msgid = 'ZMYAPP' msgno = '001' ) ).
+DATA(entries)  = logger->get_messages( ).                " full internal log
+DATA(lines)    = logger->get_messages_flat( ).           " "[ctx] E001(ZMYAPP) - text"
+DATA(bapiret2) = logger->get_messages_as_bapiret2( ).
+```
 
- * Long message truncation — internal log no longer truncates to 50 characters; full text is preserved.
- * Emergency log payload loss — dispatcher now picks the correct XCO API per source type (add_exception, add_message, add_text).
- * Memory leak in create_emergency_log — stopped mutating me->ext_number.
- * Incomplete cleanup in free() and reset_appl_log() — both now clear timer_start, context, and recreate emergency_log.
- * merge_logs short dump on unbound input — added IS BOUND check.
- * Constructor silently overriding db_save — now raises an exception when db_save = abap_true is requested without an object.
+### RAP
 
-#### Performance
+```abap
+METHOD validate_order.
+  ...
+  LOOP AT logger->get_messages_rap( ) INTO DATA(message).
+    APPEND VALUE #( %tky = order-%tky %msg = message ) TO reported-order.
+  ENDLOOP.
+ENDMETHOD.
+```
 
- * Removed unused secondary sorted key on log_messages — O(1) inserts, ~30–50% less memory per row.
- * Simplified get_messages_flat — no more redundant symsg reconstruction.
- * log_contains_messages no longer copies the full items table.
+Free-text and exception entries are wrapped in message `Z_CLOUD_LOGGER 001` (four 50-character
+placeholders).
 
-#### Improved
+### Save
 
-* Exception handling — read-only methods record exceptions in the trail instead of swallowing them.
-* Test coverage — new tests for truncation, sticky context, config conflicts, timer double-call, db-disabled save, and emergency dispatch.
-   
-### [1.5.0] - 2026-01-23
-#### Added
- * Added "Sticky Tags" that are automatically appended to all subsequent messages within the instance context. Use set_context and clear_context methods
+```abap
+logger->save_application_log( ).
+COMMIT WORK.
+```
 
-### [1.4.0] - 2026-01-18
-#### Added
-* Added support for custom Log Viewers via the `display()` method, enabling UI-agnostic log visualization (Strategy Pattern)
+The caller owns the commit. Where `COMMIT WORK` is not allowed (RAP), use
+`save_application_log( use_2nd_db_connection = abap_true )`, which lets `cl_bali_log_db`
+commit on its own connection. With `db_save = abap_false` the call does nothing and is
+recorded in the internal error trail.
 
-### [1.3.0] - 2026-01-09
-#### Added
-* Added `start_timer` and `stop_timer` methods for runtime measurement.
+### Reset, merge, free
 
-### [1.2.0] - 2026-01-07
-#### Added
-* Enhanced `log_bapiret2_table_add` with `iv_min_severity`. You can now filter logs directly during import (e.g., ignore all Success messages).
-  
-### [1.1.0] - 2026-01-04
-#### Added
-* JSON Serialization: New method `log_data_add` allows logging of any data type (Structures/Tables). Data is automatically converted to JSON format using the XCO library.
+```abap
+logger->reset_appl_log( ).                     " fresh log, same instance and configuration
+logger->reset_appl_log( abap_true ).           " also delete the persisted log
 
-### [1.0.0] - 2025-12-20
-#### Initial Release
-* Basic logging capabilities (Messages, Strings, Exceptions).
-* Fluent Interface support.
-* ABAP Cloud & Clean Core compliance.
-* Integration with SAP Application Log (BAL).
+logger->merge_logs( other_logger ).            " copies entries and trail, other stays unchanged
 
-## Roadmap
+logger->free( ).                               " deregisters; any further write raises instance_released
+```
 
- * HTML/JSON viewer.
- * Load log using cl_bali_log_db=>load_log in the current instance.
- * Use of enqueue/dequeue of cl_bali_log_db.
- * Visualization: Development of a RAP OData Service and a Fiori Dashboard for graphical log analysis and monitoring.
- * Async Performance: Implementation of asynchronous saving for high-volume scenarios to minimize runtime impact.
+### Internal error trail
+
+Problems the logger swallows on purpose (failed emergency mirror, no-op save, unresolvable
+message text, failed delete during reset) are not lost:
+
+```abap
+LOOP AT logger->get_internal_errors( ) INTO DATA(problem).
+  ...  " problem-timestamp, problem-method, problem-error_text
+ENDLOOP.
+logger->clear_internal_errors( ).
+```
+
+The trail is capped at `trim_limit` entries (default 100, oldest evicted first).
+
+## API overview
+
+| Group | Methods |
+|---|---|
+| Instance | `zcl_cloud_logger=>get_instance( )`, `free( )`, `reset_appl_log( )`, `merge_logs( )` |
+| Add | `log_string_add`, `log_message_add`, `log_syst_add`, `log_exception_add`, `log_bapiret2_structure_add`, `log_bapiret2_table_add`, `log_data_add` |
+| Context / timer | `set_context`, `clear_context`, `start_timer`, `stop_timer` |
+| Query | `log_is_empty`, `log_contains_messages`, `log_contains_error`, `log_contains_warning`, `get_message_count`, `search_message` |
+| Read | `get_messages`, `get_messages_flat`, `get_messages_as_bapiret2`, `get_messages_rap`, `get_handle`, `get_log_handle` |
+| Persist / show | `save_application_log`, `display( viewer )` |
+| Diagnostics | `get_internal_errors`, `clear_internal_errors`, `zif_cloud_logger=>c_version` |
+
+Every public method is documented with ABAP Doc; hover in ADT for parameters and behaviour.
+
+## Errors
+
+All failures surface as `zcx_cloud_logger_error`. Check `if_t100_message~t100key` against
+the class constants:
+
+| textid | Message | When |
+|---|---|---|
+| `error_in_creation` | 003 | `cl_bali_log` refused to create the log or header (e.g. unknown log object) |
+| `object_required` | 006 | `db_save = abap_true` without an Application Log object |
+| `invalid_trim_limit` | 008 | negative `trim_limit` |
+| `config_mismatch` | 007 | an instance with the same key exists with different settings |
+| `error_in_logging` | 004 | the Application Log rejected an entry |
+| `error_release` | 002 | `cl_bali_log_db` could not save the log |
+| `error_in_emergency_log` | 005 | the XCO emergency log could not be created |
+| `instance_released` | 009 | writing method called after `free( )` |
+
+The original `cx_bali_runtime` / XCO exception is chained in `previous`.
+
+## Viewers
+
+`display( viewer )` hands the logger to any implementation of `zif_cloud_logger_viewer`
+(one method: `view( logger )`).
+
+* `zcl_cloud_logger_view_console` – writes header, entries and internal error trail to an
+  `if_oo_adt_classrun_out` console. ABAP for Cloud Development.
+* `zcl_cloud_logger_view_alv` (sub-package `gui`) – ALV popup for SAP GUI systems.
+  Standard ABAP; not installable on SAP BTP ABAP Environment.
+* Your own – e.g. a viewer that pushes the entries into a Fiori app or a monitoring endpoint.
+
+## Testing code that uses the logger
+
+Depend on `zif_cloud_logger`, not on the class, and inject it:
+
+```abap
+CLASS zcl_import DEFINITION PUBLIC FINAL CREATE PUBLIC.
+  PUBLIC SECTION.
+    METHODS constructor IMPORTING logger TYPE REF TO zif_cloud_logger OPTIONAL.
+  ...
+ENDCLASS.
+```
+
+In the test, `cl_abap_testdouble=>create( 'zif_cloud_logger' )` gives you a double whose
+fluent methods can be configured to return the double itself. The library's own tests show
+the pattern with hand-written doubles for the two internal seams
+(`zif_cloud_logger_system`, `zif_cloud_logger_persistence`).
+
+## Design
+
+* **Multiton.** One instance per object / subobject / external id, created lazily by
+  `get_instance( )`, removed by `free( )`. A released instance is dead: writes raise
+  `instance_released`, queries return empty results.
+* **Two seams.** All environment access (date, time, time stamp, user, `sy-msg*`) goes
+  through `zif_cloud_logger_system`; all database access through
+  `zif_cloud_logger_persistence`. Production defaults are injected by the constructor;
+  the tests inject fixed-clock and spy doubles, so the unit tests never touch the
+  database or a real clock.
+* **Never bring the caller down.** Problems inside the logger (emergency mirror, text
+  resolution, no-op save, delete during reset) are recorded in the internal error trail
+  instead of raised. Problems in the Application Log API itself are raised, wrapped.
+* **Strategy for output.** The logger knows nothing about UIs; viewers implement
+  `zif_cloud_logger_viewer`.
+* **Clean ABAP.** No Hungarian notation, final classes, ≤ 3 parameters where the API
+  allows it (`get_instance` is the documented exception), ABAP Doc on every public element.
+  Clean Core: released APIs only, checked by abaplint with the `steampunk-2305-api` snapshot.
+
+## Development
+
+The repository runs off-stack without an SAP system:
+
+```bash
+npm ci
+npm run lint     # abaplint, full rule set curated to Clean ABAP, language version Cloud
+npm test         # transpiles to JavaScript and runs the ABAP Unit tests on Node.js
+```
+
+GitHub Actions runs both on every push and pull request. Some things only the real compiler
+catches; see [CONTRIBUTING.md](CONTRIBUTING.md) for the list and for the pull-request
+checklist.
+
+## Changelog and roadmap
+
+The version history lives in [CHANGELOG.md](CHANGELOG.md). Planned:
+
+* Load a persisted log into an instance (`cl_bali_log_db=>load_log`).
+* Enqueue / dequeue support of `cl_bali_log_db`.
+* Asynchronous saving via the Background Processing Framework for high-volume scenarios.
+* A RAP service and Fiori dashboard for log analysis.
+
+Issues and pull requests are welcome.
+
+## License and author
+
+[MIT](LICENSE). Created and maintained by [George Drakos](https://www.linkedin.com/in/george-drakos/).
