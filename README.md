@@ -59,23 +59,18 @@ returns the `if_bali_log` object). What it adds:
 ## Requirements
 
 * SAP S/4HANA 2023 or higher, SAP S/4HANA Cloud, or SAP BTP ABAP Environment
-* ABAP language version *ABAP for Cloud Development* (all objects except the optional GUI viewer)
+* ABAP language version *ABAP for Cloud Development* for every object
 * Released APIs only: `cl_bali_log`, `cl_bali_log_db`, `cl_abap_context_info`, XCO
 
 ## Installation
 
-1. Pull the repository with [abapGit](https://abapgit.org) into a package of your choice.
-   The repository uses *prefix* folder logic; the optional `gui` folder becomes the
-   sub-package `<your package>_GUI`.
+1. Pull the repository with [abapGit](https://abapgit.org) into a package of your choice
+   (ABAP language version *ABAP for Cloud Development*).
 2. The Application Log object `Z_CLOUD_LOG_SAMPLE` (sub-object `SETUP`) ships with the
    repository and is used by the tests and the demo. For your own logs create an Application
    Log object in the *Maintain Application Log Object* app (Fiori) or `SLG0` (on-premise).
    `db_save = abap_true` requires an object; `db_save = abap_false` works without one.
 3. Run the ABAP Unit tests of `zcl_cloud_logger` and `zcl_cloud_logger_view_console`.
-
-**SAP BTP ABAP Environment:** the `gui` sub-package contains `zcl_cloud_logger_view_alv`,
-which needs SAP GUI classes and cannot be activated there. Everything else is ABAP for Cloud
-Development. Use the console viewer or your own `zif_cloud_logger_viewer` implementation.
 
 ## Quick start
 
@@ -247,10 +242,9 @@ The original `cx_bali_runtime` / XCO exception is chained in `previous`.
 (one method: `view( logger )`).
 
 * `zcl_cloud_logger_view_console` – writes header, entries and internal error trail to an
-  `if_oo_adt_classrun_out` console. ABAP for Cloud Development.
-* `zcl_cloud_logger_view_alv` (sub-package `gui`) – ALV popup for SAP GUI systems.
-  Standard ABAP; not installable on SAP BTP ABAP Environment.
-* Your own – e.g. a viewer that pushes the entries into a Fiori app or a monitoring endpoint.
+  `if_oo_adt_classrun_out` console.
+* Your own – e.g. an ALV popup on an SAP GUI system, a Fiori app or a monitoring endpoint.
+  `get_messages( )` and `get_messages_flat( )` give you the data in table form.
 
 ## Testing code that uses the logger
 
