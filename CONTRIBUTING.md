@@ -64,6 +64,18 @@ Verified in ADT so far — please check these yourself before pushing:
   directly before `BEGIN OF`.
 * Method names are limited to 30 characters (abaplint reports this one).
 
+And the other direction — things the system does right that the off-stack runtime does not:
+
+* A `CONSTANTS` component whose `VALUE` refers to another constant is left blank off-stack.
+  Constants that tests depend on are written as literals.
+* `IS INSTANCE OF <interface>` is always false off-stack; a guarded `CAST` behaves correctly
+  in both places. Access the attribute in a second statement
+  (`DATA(t100) = CAST if_t100_message( x ). ... t100->t100key`), not chained on the cast.
+* `cl_abap_tstmp=>subtract` never raises off-stack and only approximates; the real kernel
+  rejected two `timestampl` operands. The logger computes durations itself.
+* Dynamic `ASSIGN oref->('INTF~ATTR')` returns an empty value off-stack; the affected test is
+  skipped in `abap_transpile.json` and runs in ADT.
+
 ## Adding a message or an exception textid
 
 1. Add the text to message class `Z_CLOUD_LOGGER` (next free number) and to
