@@ -20,9 +20,14 @@ runtime as `zif_cloud_logger=>c_version`.
 - `zcl_cloud_logger_benchmark` (F9): timing of add / render / count / save /
   delete for a configurable number of entries, plus an emergency-log probe.
 
+### Fixed
+- Emergency log: free text is mirrored as message `Z_CLOUD_LOGGER 001` with its
+  severity; XCO's `add_text` has none, so mirrored errors used to show as success.
+
 ### Measured
 - S/4HANA 2023 FPS03, 20,000 entries: add 0.46 s, render 0.016 s, save 0.058 s,
-  delete 0.010 s; emergency-log mirror clean. Numbers and setup in the README.
+  delete 0.010 s; emergency-log mirror persisted and visible in SLG1 without a
+  commit. Numbers and setup in the README.
 
 ### Changed
 - Off-stack pipeline: the transpiler no longer runs its own syntax check
