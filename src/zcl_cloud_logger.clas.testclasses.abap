@@ -69,6 +69,9 @@ CLASS ltc_cloud_logger DEFINITION FINAL
     METHODS given_explicit_default_expiry   FOR TESTING RAISING cx_static_check.
     METHODS given_error_then_object_known   FOR TESTING RAISING cx_static_check.
     METHODS given_msgno_000_then_t100_kept   FOR TESTING RAISING cx_static_check.
+    METHODS given_saved_then_load_same  FOR TESTING RAISING cx_static_check.
+    METHODS given_active_when_load_raises    FOR TESTING RAISING cx_static_check.
+    METHODS given_bad_handle_load_raises FOR TESTING RAISING cx_static_check.
     METHODS given_min_sev_e_then_keeps_2    FOR TESTING RAISING cx_static_check.
     METHODS when_log_data_then_json_entry   FOR TESTING RAISING cx_static_check.
     METHODS given_500_chars_then_kept       FOR TESTING RAISING cx_static_check.
@@ -621,6 +624,63 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
                                         msg = `Message 000 must keep its class in the RAP conversion` ).
   ENDMETHOD.
 
+  METHOD given_saved_then_load_same.
+    " Needs the real Application Log runtime (get_header, item getters)
+    cut->log_string_add( string = `persisted before load`
+                         msgty  = 'E' ).
+    cut->save_application_log( ).
+    DATA(handle) = cut->get_handle( ).
+    cut->free( ).
+
+    cut = zcl_cloud_logger=>load( handle ).
+    cut->log_string_add( `appended after load` ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_handle( )
+                                        exp = handle
+                                        msg = `The loaded logger must write to the same Application Log` ).
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 2
+                                        msg = `Persisted items plus new entries must both be visible` ).
+    cl_abap_unit_assert=>assert_equals( act = cut->log_contains_error( )
+                                        exp = abap_true
+                                        msg = `Queries must see the persisted history` ).
+    cl_abap_unit_assert=>assert_equals( act = zcl_cloud_logger=>get_instance( object    = test_object
+                                                                              subobject = test_subobject )
+                                        exp = cut
+                                        msg = `The loaded instance must be registered under the log's key` ).
+  ENDMETHOD.
+
+  METHOD given_active_when_load_raises.
+    " Needs the real Application Log runtime
+    cut->save_application_log( ).
+
+    TRY.
+        zcl_cloud_logger=>load( cut->get_handle( ) ).
+        cl_abap_unit_assert=>fail( `Loading a log whose key is active must raise` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>already_active
+                                            msg = `The conflict must be reported as already_active` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_bad_handle_load_raises.
+    " Needs the real Application Log runtime
+    TRY.
+        zcl_cloud_logger=>load( 'NO_SUCH_HANDLE' ).
+        cl_abap_unit_assert=>fail( `An unknown handle must raise` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>error_in_loading
+                                            msg = `The failure must be reported as error_in_loading` ).
+        cl_abap_unit_assert=>assert_equals( act = error->log_handle
+                                            exp = 'NO_SUCH_HANDLE'
+                                            msg = `The exception must carry the handle` ).
+    ENDTRY.
+  ENDMETHOD.
+
   METHOD given_blank_msgty_then_warning.
     cut->log_message_add( VALUE #( msgid = 'CL'
                                    msgno = '000'
@@ -1066,13 +1126,19 @@ CLASS ltd_persistence_spy DEFINITION FINAL FOR TESTING.
     DATA saved_log            TYPE REF TO if_bali_log  READ-ONLY.
     DATA saved_on_2nd_db_conn TYPE abap_boolean        READ-ONLY.
     DATA saved_to_appl_job    TYPE abap_boolean        READ-ONLY.
+    DATA load_calls           TYPE i                   READ-ONLY.
+    DATA loaded_handle        TYPE balloghndl          READ-ONLY.
 
     METHODS fail_next_save.
     METHODS fail_next_delete.
+    "! What the next load_log( ) returns
+    METHODS answer_load_with
+      IMPORTING loaded TYPE zif_cloud_logger_persistence=>loaded_log.
 
   PRIVATE SECTION.
     DATA fail_save   TYPE abap_boolean.
     DATA fail_delete TYPE abap_boolean.
+    DATA load_answer TYPE zif_cloud_logger_persistence=>loaded_log.
 ENDCLASS.
 
 
@@ -1094,6 +1160,16 @@ CLASS ltd_persistence_spy IMPLEMENTATION.
 
   METHOD fail_next_delete.
     fail_delete = abap_true.
+  ENDMETHOD.
+
+  METHOD answer_load_with.
+    load_answer = loaded.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger_persistence~load_log.
+    load_calls   += 1.
+    loaded_handle = handle.
+    result        = load_answer.
   ENDMETHOD.
 
   METHOD zif_cloud_logger_persistence~save_log.
@@ -1152,6 +1228,13 @@ CLASS ltc_cloud_logger_isolated DEFINITION FINAL
     METHODS given_reset_no_db_no_delete     FOR TESTING RAISING cx_static_check.
     METHODS given_delete_fails_then_trail   FOR TESTING RAISING cx_static_check.
     METHODS when_merge_then_trail_ordered   FOR TESTING RAISING cx_static_check.
+    METHODS given_loaded_then_history_kept  FOR TESTING RAISING cx_static_check.
+    METHODS given_loaded_then_add_appends FOR TESTING RAISING cx_static_check.
+    METHODS given_loaded_then_save_same FOR TESTING RAISING cx_static_check.
+
+    METHODS attach_to_prepared_log
+      RETURNING VALUE(result) TYPE REF TO zif_cloud_logger
+      RAISING   cx_static_check.
 
 ENDCLASS.
 
@@ -1350,6 +1433,78 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( act = persistence->delete_calls
                                         exp = 0
                                         msg = `A plain reset must not touch the database` ).
+  ENDMETHOD.
+
+  METHOD attach_to_prepared_log.
+    " A log "read from the database": a real in-memory BAL object plus the
+    " entries the persistence adapter would have mapped from its items
+    DATA(persisted) = cl_bali_log=>create( ).
+    persisted->add_item( cl_bali_free_text_setter=>create( severity = 'E'
+                                                           text     = 'persisted error' ) ).
+    persisted->add_item( cl_bali_free_text_setter=>create( severity = 'W'
+                                                           text     = 'persisted warning' ) ).
+
+    DATA(loaded) = VALUE zif_cloud_logger_persistence=>loaded_log(
+        log         = persisted
+        object      = test_object
+        subobject   = test_subobject
+        external_id = 'LOADED'
+        expiry_date = '20301231'
+        entries     = VALUE #( ( symsg = VALUE #( msgty = 'E' ) type = 'E' message = `persisted error` )
+                               ( symsg = VALUE #( msgty = 'W' ) type = 'W' message = `persisted warning` ) ) ).
+
+    result = NEW zcl_cloud_logger( object      = loaded-object
+                                   subobject   = loaded-subobject
+                                   ext_number  = loaded-external_id
+                                   expiry_date = loaded-expiry_date
+                                   system      = system
+                                   persistence = persistence
+                                   loaded_log  = loaded ).
+  ENDMETHOD.
+
+  METHOD given_loaded_then_history_kept.
+    DATA(loaded_logger) = attach_to_prepared_log( ).
+
+    cl_abap_unit_assert=>assert_equals( act = loaded_logger->get_message_count( )
+                                        exp = 2
+                                        msg = `Persisted items must become internal log entries` ).
+    cl_abap_unit_assert=>assert_equals( act = loaded_logger->log_contains_error( )
+                                        exp = abap_true
+                                        msg = `Severity queries must see the persisted history` ).
+    cl_abap_unit_assert=>assert_equals( act = loaded_logger->get_messages_flat( )
+                                        exp = VALUE zif_cloud_logger=>flat_messages( ( `persisted error` )
+                                                                                     ( `persisted warning` ) )
+                                        msg = `Flat rendering must show the persisted texts` ).
+  ENDMETHOD.
+
+  METHOD given_loaded_then_add_appends.
+    DATA(loaded_logger) = attach_to_prepared_log( ).
+
+    loaded_logger->log_string_add( `appended` ).
+
+    DATA(messages) = loaded_logger->get_messages( ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( messages )
+                                        exp = 3
+                                        msg = `New entries must be appended after the persisted ones` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 3 ]-message
+                                        exp = `appended`
+                                        msg = `The new entry must be the last one` ).
+    cl_abap_unit_assert=>assert_bound( act = messages[ 3 ]-item
+                                       msg = `A new entry must be written to the attached Application Log` ).
+  ENDMETHOD.
+
+  METHOD given_loaded_then_save_same.
+    DATA(loaded_logger) = attach_to_prepared_log( ).
+
+    loaded_logger->save_application_log( ).
+
+    cl_abap_unit_assert=>assert_equals( act = persistence->save_calls
+                                        exp = 1
+                                        msg = `Saving a loaded logger must persist once` ).
+    cl_abap_unit_assert=>assert_equals( act = persistence->saved_log
+                                        exp = loaded_logger->get_log_handle( )
+                                        msg = `The attached Application Log itself must be saved, not a new one` ).
   ENDMETHOD.
 
   METHOD when_merge_then_trail_ordered.

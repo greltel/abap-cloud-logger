@@ -57,7 +57,8 @@ CLASS zcl_cloud_logger DEFINITION
     "! collapsing them into a single structure would lose that distinction and
     "! break the public API. Documented, accepted deviation.</p>
     "!
-    "! @parameter enable_emergency_log   | abap_true mirrors every entry via XCO BAL (best-effort)
+    "! @parameter enable_emergency_log   | abap_true mirrors every entry into a second, immediately
+    "!                                     persisted log via XCO BAL (best-effort, see README)
     "! @parameter object                 | Application Log object (BAL); required when db_save = abap_true
     "! @parameter subobject              | Application Log subobject
     "! @parameter ext_number             | External ID; also part of the multiton key
@@ -77,6 +78,28 @@ CLASS zcl_cloud_logger DEFINITION
       RETURNING VALUE(result)        TYPE REF TO zif_cloud_logger
       RAISING   zcx_cloud_logger_error.
 
+    "! <p class="shorttext synchronized" lang="en">Attach to a persisted Application Log</p>
+    "!
+    "! <p>Loads the log with the given handle from the database and returns a logger
+    "! that continues writing to it: the persisted items become internal log
+    "! entries (their <em>item</em> and <em>context</em> stay initial, date and time
+    "! are UTC), further <em>log_*</em> calls append, <em>save_application_log( )</em>
+    "! updates the same log. The instance is registered under the log's own
+    "! object / subobject / external id, so <em>get_instance( )</em> with that key
+    "! returns it. Loaded loggers always persist (db_save) and never mirror to an
+    "! emergency log.</p>
+    "!
+    "! @parameter handle                 | Application Log handle (BALLOGHNDL) of a saved log
+    "! @parameter trim_limit             | Max trail entries, FIFO (default 100; 0 = no trail; negative raises)
+    "! @parameter result                 | Logger attached to the persisted log
+    "! @raising   zcx_cloud_logger_error | No log with this handle (error_in_loading), or a logger
+    "!                                     with the same handle or key is active (already_active)
+    CLASS-METHODS load
+      IMPORTING handle        TYPE balloghndl
+                trim_limit    TYPE i DEFAULT zif_cloud_logger=>c_default_trim_limit
+      RETURNING VALUE(result) TYPE REF TO zif_cloud_logger
+      RAISING   zcx_cloud_logger_error.
+
     "! <p class="shorttext synchronized" lang="en">Initialize a logger instance</p>
     "!
     "! <p>Public so that CREATE PRIVATE governs instantiation instead of the
@@ -94,6 +117,8 @@ CLASS zcl_cloud_logger DEFINITION
     "! @parameter trim_limit             | Max internal-error trail entries (FIFO)
     "! @parameter system                 | Environment access; defaults to {@link zcl_cloud_logger_system}
     "! @parameter persistence            | Database access; defaults to {@link zcl_cloud_logger_persistence}
+    "! @parameter loaded_log             | A log read back from the database: the instance attaches to
+    "!                                     it instead of creating a new Application Log (see load)
     "! @raising   zcx_cloud_logger_error | Invalid configuration or creation failure
     METHODS constructor
       IMPORTING enable_emergency_log TYPE abap_boolean                          DEFAULT abap_false
@@ -105,6 +130,7 @@ CLASS zcl_cloud_logger DEFINITION
                 trim_limit           TYPE i DEFAULT zif_cloud_logger=>c_default_trim_limit
                 !system              TYPE REF TO zif_cloud_logger_system        OPTIONAL
                 persistence          TYPE REF TO zif_cloud_logger_persistence   OPTIONAL
+                loaded_log           TYPE zif_cloud_logger_persistence=>loaded_log OPTIONAL
       RAISING   zcx_cloud_logger_error.
 
   PRIVATE SECTION.
@@ -213,12 +239,11 @@ CLASS zcl_cloud_logger DEFINITION
       IMPORTING msgty         TYPE symsgty
       RETURNING VALUE(result) TYPE severity_filter_range.
 
-    " Best-effort mirror to the XCO emergency log; picks add_exception, add_message
-    " or add_text depending on the input. Failures go to the internal error trail.
+    " Best-effort mirror to the XCO emergency log; picks add_exception or
+    " add_message depending on the input. Failures go to the internal error trail.
     METHODS mirror_to_emergency_log
       IMPORTING !exception TYPE REF TO cx_root OPTIONAL
-                symsg      TYPE symsg          OPTIONAL
-                !text      TYPE string         OPTIONAL.
+                symsg      TYPE symsg          OPTIONAL.
 
     " Records a swallowed problem; either an exception or a plain text is supplied
     METHODS record_internal_error
@@ -327,6 +352,14 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     me->trim_limit           = trim_limit.
     user_alias               = effective_system->user_name( ).
 
+    IF loaded_log-log IS BOUND.
+      " Attach: the persisted log is the log, its items are the history
+      log_handle       = loaded_log-log.
+      log_messages     = loaded_log-entries.
+      effective_expiry = loaded_log-expiry_date.
+      RETURN.
+    ENDIF.
+
     TRY.
         log_handle = cl_bali_log=>create( ).
         header     = create_header( ).
@@ -339,6 +372,55 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     ENDTRY.
 
     create_emergency_log( ).
+  ENDMETHOD.
+
+  METHOD load.
+    " A log that is still held by a live logger cannot be loaded a second time -
+    " the Application Log itself refuses it - so the session check comes first,
+    " by handle, to report the real reason instead of a generic load failure.
+    LOOP AT logger_instances REFERENCE INTO DATA(active).
+      IF active->logger->get_handle( ) = handle.
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>already_active
+                                                    log_object = active->log_object
+                                                    log_handle = handle ).
+      ENDIF.
+    ENDLOOP.
+
+    DATA(db) = NEW zcl_cloud_logger_persistence( ).
+
+    TRY.
+        DATA(loaded) = db->zif_cloud_logger_persistence~load_log( handle ).
+
+      CATCH cx_bali_runtime INTO DATA(error).
+        RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>error_in_loading
+                                                    previous   = error
+                                                    log_handle = handle ).
+    ENDTRY.
+
+    IF line_exists( logger_instances[ log_object    = loaded-object
+                                      log_subobject = loaded-subobject
+                                      extnumber     = loaded-external_id ] ).
+      RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>already_active
+                                                  log_object = loaded-object ).
+    ENDIF.
+
+    result = NEW zcl_cloud_logger( object      = loaded-object
+                                   subobject   = loaded-subobject
+                                   ext_number  = loaded-external_id
+                                   db_save     = abap_true
+                                   expiry_date = loaded-expiry_date
+                                   trim_limit  = trim_limit
+                                   persistence = db
+                                   loaded_log  = loaded ).
+
+    INSERT VALUE #( log_object           = loaded-object
+                    log_subobject        = loaded-subobject
+                    extnumber            = loaded-external_id
+                    db_save              = abap_true
+                    enable_emergency_log = abap_false
+                    expiry_date          = loaded-expiry_date
+                    trim_limit           = trim_limit
+                    logger               = result ) INTO TABLE logger_instances.
   ENDMETHOD.
 
   METHOD zif_cloud_logger~log_string_add.
@@ -355,7 +437,10 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
                                item    = item
                                message = string ) ).
 
-        mirror_to_emergency_log( text = string ).
+        " Mirrored as the carrier message, not as free text: XCO's add_text has no
+        " severity, and an emergency log where errors show as green is useless.
+        mirror_to_emergency_log( symsg = text_to_symsg( text  = string
+                                                        msgty = msgty ) ).
 
       CATCH cx_bali_runtime INTO DATA(error).
         RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>error_in_logging
@@ -1018,9 +1103,6 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
 
         ELSEIF symsg-msgid IS NOT INITIAL.
           emergency_log->add_message( symsg ).
-
-        ELSEIF text IS NOT INITIAL.
-          emergency_log->add_text( xco_cp=>string( text ) ).
         ENDIF.
 
       CATCH cx_root INTO DATA(error).

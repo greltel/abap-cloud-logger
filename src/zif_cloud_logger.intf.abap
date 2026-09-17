@@ -10,7 +10,7 @@ INTERFACE zif_cloud_logger
   PUBLIC.
 
   "! Library version (semantic versioning).
-  CONSTANTS c_version TYPE string VALUE `2.1.0`.
+  CONSTANTS c_version TYPE string VALUE `2.2.0`.
 
   "! Table of BAPI return structures.
   TYPES bapiret2_messages TYPE STANDARD TABLE OF bapiret2 WITH EMPTY KEY.

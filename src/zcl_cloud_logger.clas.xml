@@ -210,6 +210,11 @@
      <DESCRIPT>Get Severity Level of Message Type</DESCRIPT>
     </SEOCOMPOTX>
     <SEOCOMPOTX>
+     <CMPNAME>LOAD</CMPNAME>
+     <LANGU>E</LANGU>
+     <DESCRIPT>Attach to a persisted Application Log</DESCRIPT>
+    </SEOCOMPOTX>
+    <SEOCOMPOTX>
      <CMPNAME>MIRROR_TO_EMERGENCY_LOG</CMPNAME>
      <LANGU>E</LANGU>
      <DESCRIPT>Mirror message to emergency log via XCO</DESCRIPT>

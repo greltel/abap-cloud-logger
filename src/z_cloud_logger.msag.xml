@@ -67,6 +67,18 @@
      <MSGNR>009</MSGNR>
      <TEXT>Logger &amp;1 was released via FREE; request a new one with GET_INSTANCE.</TEXT>
     </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>Z_CLOUD_LOGGER</ARBGB>
+     <MSGNR>010</MSGNR>
+     <TEXT>Application Log with handle &amp;1 could not be loaded.</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>Z_CLOUD_LOGGER</ARBGB>
+     <MSGNR>011</MSGNR>
+     <TEXT>Logger &amp;1 is already active in this session; free it before loading.</TEXT>
+    </T100>
    </T100>
   </asx:values>
  </asx:abap>
