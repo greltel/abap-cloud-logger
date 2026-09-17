@@ -92,13 +92,24 @@ DATA(logger) = zcl_cloud_logger=>get_instance(
     ext_number           = |{ run_id }|      " part of the instance key
     db_save              = abap_true         " abap_false: save_application_log( ) is a no-op
     expiry_date          = CONV #( cl_abap_context_info=>get_system_date( ) + 30 )
-    enable_emergency_log = abap_false        " abap_true mirrors every entry via XCO BAL (best effort)
+    enable_emergency_log = abap_false        " abap_true mirrors every entry into a second log (see below)
     trim_limit           = 100 ).            " cap of the internal error trail
 ```
 
 The same object / subobject / external id always returns the same instance. Supplying a
 different `db_save`, `expiry_date`, `trim_limit` or `enable_emergency_log` for an existing
 instance raises `config_mismatch`; omitting a parameter means "no preference".
+
+### Emergency log
+
+With `enable_emergency_log = abap_true` every entry is also written, immediately and
+independently of your commit, into a second Application Log through the XCO BAL API (same
+object and subobject; external id = yours, or a UUID when you gave none). It is meant for
+the case where the main log never gets saved — a dump after logging, a rollback — and it is
+best effort: a failed mirror goes to the internal error trail, never to the caller. Free text
+is mirrored as message `Z_CLOUD_LOGGER 001` so the severity survives; XCO records an
+exception as five lines (text, class, source position), so counts in that log differ from
+`get_message_count( )`.
 
 ### Add entries
 
@@ -258,7 +269,7 @@ Measured on S/4HANA 2023 FPS03 (on-premise, 2026-09-17), 20,000 entries, every 1
 | `save_application_log( )` + `COMMIT WORK` | 0.058 s | 0.003 ms |
 | `reset_appl_log( abap_true )` + `COMMIT WORK` | 0.010 s | — |
 
-Emergency-log mirror: 3 entries, 0 internal errors. At these numbers the in-memory copy is
+Emergency-log mirror: 3 entries, 0 internal errors, visible in SLG1 without a commit. At these numbers the in-memory copy is
 not the bottleneck for typical jobs; save-and-reset per batch remains the advice for runs
 that keep hundreds of thousands of entries alive at once.
 
