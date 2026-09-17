@@ -1,6 +1,6 @@
 # ABAP Cloud Logger
 
-[![Version](https://img.shields.io/badge/version-2.1.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue)](CHANGELOG.md)
 [![Tests](https://github.com/greltel/abap-cloud-logger/actions/workflows/ci.yml/badge.svg)](https://github.com/greltel/abap-cloud-logger/actions/workflows/ci.yml)
 [![ABAP Cloud](https://img.shields.io/badge/ABAP-Cloud%20Ready-green)](https://abaplint.app/stats/greltel/abap-cloud-logger/object_classifications)
 [![Code Statistics](https://img.shields.io/badge/CodeStatistics-abaplint-blue)](https://abaplint.app/stats/greltel/abap-cloud-logger)
@@ -187,6 +187,28 @@ The caller owns the commit. Where `COMMIT WORK` is not allowed (RAP), use
 commit on its own connection. With `db_save = abap_false` the call does nothing and is
 recorded in the internal error trail.
 
+### Attach to a persisted log
+
+A log saved earlier — by a previous run, another session, a job step — can be picked up again
+by its handle and continued:
+
+```abap
+DATA(logger) = zcl_cloud_logger=>load( handle ).      " BALLOGHNDL from get_handle( ) or the log tables
+
+logger->log_string_add( `second run started` ).       " appends to the persisted items
+IF logger->log_contains_error( ).                     " queries see the persisted history
+  ...
+ENDIF.
+logger->save_application_log( ).                      " updates the same log
+```
+
+The loaded logger is registered under the log's own object / subobject / external id, so a
+later `get_instance( )` with that key returns it. Persisted items become internal log
+entries with the item's severity, text and T100 key; their `item` reference and `context`
+stay initial and date/time are UTC (the Application Log stores UTC). Loading a log that is
+still held by a live logger in the session — same handle or same key — raises
+`already_active` (`free( )` it first); an unknown handle raises `error_in_loading`.
+
 ### Reset, merge, free
 
 ```abap
@@ -221,11 +243,30 @@ thousands of lines, save and reset per batch — `save_application_log( )` then
 `reset_appl_log( )` — instead of holding one log for the whole run, and keep `trim_limit`
 at its default. `get_messages_flat( )` renders every entry, so call it once, not per line.
 
+`zcl_cloud_logger_benchmark` (F9) measures adding, rendering, counting, saving and deleting
+`entries` entries on your system and checks the emergency-log mirror; raise the constant to
+find your limit. Watch memory from outside (SM04 / SM50) — the memory utilities are not
+released for ABAP Cloud.
+
+Measured on S/4HANA 2023 FPS03 (on-premise, 2026-09-17), 20,000 entries, every 10th an error:
+
+| Step | Time | Per entry |
+|---|---|---|
+| `log_string_add` × 20,000 | 0.46 s | 0.023 ms |
+| `get_messages_flat( )` (20,000 lines) | 0.016 s | 0.001 ms |
+| `get_message_count( 'E' )` | 0.002 s | — |
+| `save_application_log( )` + `COMMIT WORK` | 0.058 s | 0.003 ms |
+| `reset_appl_log( abap_true )` + `COMMIT WORK` | 0.010 s | — |
+
+Emergency-log mirror: 3 entries, 0 internal errors. At these numbers the in-memory copy is
+not the bottleneck for typical jobs; save-and-reset per batch remains the advice for runs
+that keep hundreds of thousands of entries alive at once.
+
 ## API overview
 
 | Group | Methods |
 |---|---|
-| Instance | `zcl_cloud_logger=>get_instance( )`, `free( )`, `reset_appl_log( )`, `merge_logs( )` |
+| Instance | `zcl_cloud_logger=>get_instance( )`, `zcl_cloud_logger=>load( handle )`, `free( )`, `reset_appl_log( )`, `merge_logs( )` |
 | Add | `log_string_add`, `log_message_add`, `log_syst_add`, `log_exception_add`, `log_bapiret2_structure_add`, `log_bapiret2_table_add`, `log_data_add` |
 | Context / timer | `set_context`, `clear_context`, `start_timer`, `stop_timer` |
 | Query | `log_is_empty`, `log_contains_messages`, `log_contains_error`, `log_contains_warning`, `get_message_count`, `search_message` |
@@ -251,6 +292,8 @@ the class constants:
 | `error_release` | 002 | `cl_bali_log_db` could not save the log |
 | `error_in_emergency_log` | 005 | the XCO emergency log could not be created |
 | `instance_released` | 009 | writing method called after `free( )` |
+| `error_in_loading` | 010 | `load( )` found no log for the handle (`log_handle` names it) |
+| `already_active` | 011 | `load( )` for a log still held by a live logger in this session (same handle or key) |
 
 The original `cx_bali_runtime` / XCO exception is chained in `previous`, and `log_object`
 names the Application Log object concerned; the message texts show it as `&1`.
@@ -339,7 +382,7 @@ checklist.
 
 | Check | Result | Where |
 |---|---|---|
-| ABAP Unit | 86 tests, all green | ADT on S/4HANA 2023 FPS03 (ABAP 7.58), off-stack on every commit |
+| ABAP Unit | 92 tests, all green | ADT on S/4HANA 2023 FPS03 (ABAP 7.58), off-stack on every commit |
 | ATC, variant `ABAP_CLOUD_READINESS` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
 | ATC, variant `S4HANA_READINESS_2023` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
 | abaplint, 178 rules, language version Cloud, API snapshot `steampunk-2305-api` | 0 findings | [GitHub Actions](https://github.com/greltel/abap-cloud-logger/actions/workflows/ci.yml) |
