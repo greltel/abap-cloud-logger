@@ -5,6 +5,30 @@ All notable changes to ABAP Cloud Logger are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The installed version is available at
 runtime as `zif_cloud_logger=>c_version`.
 
+## [2.2.0] - 2026-09-17
+
+### Added
+- `zcl_cloud_logger=>load( handle )`: attaches to a persisted Application Log
+  and continues writing to it. Persisted items become internal log entries
+  (severity, text, T100 key; `item`/`context` initial, date/time UTC), the
+  instance is registered under the log's key, `save_application_log( )` updates
+  the same log. New textids `error_in_loading` (010, carries `log_handle`) and
+  `already_active` (011, raised before the database is touched when the log is
+  still held by a live logger of the session).
+- `zif_cloud_logger_persistence~load_log( )` and the `loaded_log` structure; the
+  production adapter maps `if_bali_item_getter` / `if_bali_message_getter` items.
+- `zcl_cloud_logger_benchmark` (F9): timing of add / render / count / save /
+  delete for a configurable number of entries, plus an emergency-log probe.
+
+### Measured
+- S/4HANA 2023 FPS03, 20,000 entries: add 0.46 s, render 0.016 s, save 0.058 s,
+  delete 0.010 s; emergency-log mirror clean. Numbers and setup in the README.
+
+### Changed
+- Off-stack pipeline: the transpiler no longer runs its own syntax check
+  (`ignoreSyntaxCheck`); abaplint against the SAP API snapshot is the syntax
+  authority. Three `load( )` integration tests run in ADT only.
+
 ## [2.1.0] - 2026-09-16
 
 ### Added
