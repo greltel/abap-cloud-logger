@@ -3,7 +3,7 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: monthly
+      interval: daily
     groups:
       abaplint:
         patterns:
@@ -11,4 +11,5 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+      
