@@ -54,12 +54,6 @@
       {
         "object": "ZCL_CLOUD_LOGGER",
         "class": "LTC_CLOUD_LOGGER",
-        "method": "GIVEN_ACTIVE_WHEN_LOAD_RAISES",
-        "note": "open-abap-bal has no get_header / item getters; runs in ADT"
-      },
-      {
-        "object": "ZCL_CLOUD_LOGGER",
-        "class": "LTC_CLOUD_LOGGER",
         "method": "GIVEN_BAD_HANDLE_LOAD_RAISES",
         "note": "open-abap-bal has no get_header / item getters; runs in ADT"
       }
