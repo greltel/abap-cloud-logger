@@ -38,13 +38,9 @@
     "addFilenames": true,
     "addCommonJS": true,
     "unknownTypes": "runtimeError",
-    "skip": [
-      {
-        "object": "ZCL_CLOUD_LOGGER",
-        "class": "LTC_CLOUD_LOGGER",
-        "method": "GIVEN_UNKNOWN_OBJECT_RAISES",
-        "note": "open-abap-bal does not yet validate application log objects, APLO"
-      }
-    ]
+    "setup": {
+      "filename": "../offstack/setup.mjs",
+      "preFunction": "setup"
+    }
   }
 }
