@@ -49,8 +49,11 @@ The abaplint configuration enforces most of it; the points people most often tri
   `ltd_fixed_system` and `ltd_persistence_spy`; put anything that depends on time, user or
   the database there.
 * No `WAIT`, no `SELECT`, no `COMMIT WORK` in tests. `RISK LEVEL HARMLESS` means it.
-* A test that cannot run off-stack (e.g. it needs the real Application Log object check) is
-  skipped via `abap_transpile.json` with a note saying why.
+* Off-stack the tests run against an in-memory SQLite database (`offstack/setup.mjs`), which
+  registers every `src/*.aplo.json` in BALOBJ / BALSUB, so the Application Log object check
+  works there too. A new Application Log object only needs its `.aplo.json` in `src`.
+* A test that still cannot run off-stack is skipped via `abap_transpile.json` with a note
+  saying why. Today nothing is skipped.
 
 ## What the off-stack pipeline does not catch
 
