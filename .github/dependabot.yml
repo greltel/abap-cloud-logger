@@ -3,7 +3,11 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: daily
+      interval: cron
+      cronjob: "0 7 1,11,21 * *"
+      timezone: Europe/Athens
+    cooldown:
+      default-days: 5
     groups:
       abaplint:
         patterns:
@@ -11,5 +15,4 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      
+      interval: monthly
