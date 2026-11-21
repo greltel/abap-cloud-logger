@@ -448,6 +448,20 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
                                         msg = `free( ) on a stale reference must not drop the registered instance` ).
   ENDMETHOD.
 
+  METHOD given_other_freed_then_kept.
+    DATA(other) = secondary_logger( 'OTHER' ).
+
+    other->free( ).
+
+    DATA(again) = zcl_cloud_logger=>get_instance( object    = test_object
+                                                  subobject = test_subobject
+                                                  db_save   = abap_true ).
+
+    cl_abap_unit_assert=>assert_equals( act = again
+                                        exp = cut
+                                        msg = `free( ) must drop only its own registry entry` ).
+  ENDMETHOD.
+
   METHOD when_self_merge_then_unchanged.
     cut->log_string_add( `only one` ).
 
@@ -1540,20 +1554,6 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( act = lines( cut->get_internal_errors( ) )
                                         exp = 1
                                         msg = `The failed delete must be recorded in the internal trail` ).
-  ENDMETHOD.
-
-  METHOD given_other_freed_then_kept.
-    DATA(other) = secondary_logger( 'OTHER' ).
-
-    other->free( ).
-
-    DATA(again) = zcl_cloud_logger=>get_instance( object    = test_object
-                                                  subobject = test_subobject
-                                                  db_save   = abap_true ).
-
-    cl_abap_unit_assert=>assert_equals( act = again
-                                        exp = cut
-                                        msg = `free( ) must drop only its own registry entry` ).
   ENDMETHOD.
 
 ENDCLASS.
