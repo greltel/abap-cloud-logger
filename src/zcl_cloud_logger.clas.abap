@@ -700,10 +700,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
                                                   log_subobject = subobject
                                                   extnumber     = ext_number ]-logger OPTIONAL ).
     IF registered = me.
-      DELETE TABLE logger_instances
-             WITH TABLE KEY log_object    = object
-                            log_subobject = subobject
-                            extnumber     = ext_number.
+      DELETE logger_instances WHERE log_object    = object
+                                AND log_subobject = subobject
+                                AND extnumber     = ext_number.
     ENDIF.
 
     released = abap_true.
