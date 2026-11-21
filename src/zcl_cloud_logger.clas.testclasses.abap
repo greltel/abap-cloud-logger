@@ -101,6 +101,7 @@ CLASS ltc_cloud_logger DEFINITION FINAL
     METHODS given_no_db_save_then_trail     FOR TESTING RAISING cx_static_check.
     METHODS given_50_saves_then_log_clean   FOR TESTING RAISING cx_static_check.
     METHODS given_trim_5_then_trail_5       FOR TESTING RAISING cx_static_check.
+    METHODS given_other_freed_then_kept     FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -445,6 +446,20 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( act = again
                                         exp = cut
                                         msg = `free( ) on a stale reference must not drop the registered instance` ).
+  ENDMETHOD.
+
+  METHOD given_other_freed_then_kept.
+    DATA(other) = secondary_logger( 'OTHER' ).
+
+    other->free( ).
+
+    DATA(again) = zcl_cloud_logger=>get_instance( object    = test_object
+                                                  subobject = test_subobject
+                                                  db_save   = abap_true ).
+
+    cl_abap_unit_assert=>assert_equals( act = again
+                                        exp = cut
+                                        msg = `free( ) must drop only its own registry entry` ).
   ENDMETHOD.
 
   METHOD when_self_merge_then_unchanged.
