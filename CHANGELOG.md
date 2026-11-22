@@ -5,6 +5,86 @@ All notable changes to ABAP Cloud Logger are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The installed version is available at
 runtime as `zif_cloud_logger=>c_version`.
 
+## [Unreleased]
+
+Hardening after a full audit of 2.2.0. No signature of the released API changed; the
+behaviour changes are listed under *Changed* and *Fixed*.
+
+### Fixed
+- BAPIRET2 rows without a message class lost their text (the entry read `E::000`). Such a
+  row is logged as free text with the row's severity; a row without class and without text
+  is ignored. A row whose message cannot be resolved keeps the text the BAPI supplied.
+- Free text converted for RAP, and mirrored to the emergency log, lost the blank at
+  characters 50, 100 and 150 ("...order has" + "been..." became "...order hasbeen..."). The
+  text is split so that no message variable ends on a blank.
+- A blank or lower-case severity produced entries that `log_contains_*` and
+  `get_message_count( )` did not see, and `min_severity = 'e'` filtered nothing. Every
+  `log_*` method and the BAPIRET2 filter normalize the severity now: upper case, and a
+  blank or unknown value becomes the default of the method (warning; error for exceptions;
+  success for a BAPIRET2 row).
+- A numeric attribute named in the T100 key of an exception arrived right-aligned in the
+  message variable (47 blanks, then `42`). Attributes are formatted like in a string
+  template; an attribute that is not elementary yields an empty variable instead of a
+  conversion error.
+- `load( )` of a log that was saved without entries: `get_all_items( )` is documented to
+  raise `cx_bali_not_found` for such a log, which surfaced as `error_in_loading`. It loads
+  as an empty logger.
+- `log_bapiret2_table_add( )`: one row rejected by the Application Log no longer drops the
+  rows behind it. The first rejection is raised after the table was processed.
+- `reset_appl_log( abap_true )` deleted the persisted log before the new log existed. The new
+  log is created first; if that fails, the old log is untouched.
+- After a reset on a later day the registry kept the old default expiry, so spelling out the
+  new default was reported as `config_mismatch`.
+- `get_instance( )` with a negative `trim_limit` for a key that is in use raised
+  `config_mismatch` instead of `invalid_trim_limit`; `load( )` validated `trim_limit` only
+  after reading the database.
+- `enable_emergency_log = abap_true` without an Application Log object raised
+  `error_in_emergency_log`; it raises `object_required` (message 006, text adjusted).
+- Emergency log: exceptions were mirrored without their severity; the external id of a
+  logger without `ext_number` was a UUID nobody could read back, generated outside the
+  error handling. The handle of the main log is used instead.
+- The merged internal error trail is sorted `STABLE`, so entries of the same instant keep
+  their order on the kernel.
+- The logger's own diagnostic texts (timer, no-op save, JSON failure) were empty in a logon
+  language without translation; the text symbols carry their English text as fallback.
+- `search_message( )` ignored `msgv1` to `msgv4`: a search for a variable alone matched any
+  entry. Filled variables are compared now.
+- `zcl_cloud_logger_fake` drifted from the logger: it dropped the T100 key of exceptions,
+  showed the raw message parts instead of the T100 text, took BAPIRET2 rows differently,
+  logged no timer warnings and raised on data that cannot be serialized.
+
+### Changed
+- Entry `date` and `time` are UTC and come from one time stamp per entry (they used to be
+  two separate readings of system date and system time). Loaded entries were UTC already.
+- Entry `user_name` is the technical user name. The alias, up to 40 characters, was cut to
+  the 12 characters of the field and matched neither the alias nor the user.
+- `log_contains_error( )`, `log_contains_warning( )` and `get_message_count( )` read
+  counters kept with the entries instead of scanning the log.
+- `get_message_count( )` accepts the severity in lower case.
+- The emergency log is written through `zif_cloud_logger_persistence`
+  (`open_emergency_log`, `mirror_message`, `mirror_exception`), like every other database
+  access. `zif_cloud_logger_system~system_time` is gone. Both interfaces are internal seams,
+  not released API.
+- `zcl_cloud_logger_benchmark` prints the internal error trail after the volume run, so a
+  refused delete is visible.
+
+### Added
+- `zcl_cloud_logger_conversion`: the pure conversions shared by logger and fake (severity,
+  free-text split, exception key, text fallback, search). Internal, not released.
+- Tests: 197 (93 before). A contract test runs 14 scenarios against the real logger and the
+  fake and compares everything a consumer can observe; the emergency log, `load( )` through
+  an injected persistence and the Application Log items (context prefix, cut at 200
+  characters) are covered for the first time. One test (`when_merge_then_items_copied`)
+  needs the real Application Log runtime and is skipped off-stack.
+- README: emergency-log cost and life cycle, a RAP recipe (collect, save in the save phase,
+  free in `cleanup`), *keep until expiry*, authorizations, the 999,999-item limit, "merge
+  once", where the context is persisted. CONTRIBUTING: the list of kernel-only behaviour.
+
+### Not in this release
+- Releasing logs from Application Log memory (`release_memory`) waits for the off-stack stub.
+- A logger without Application Log object (`db_save = abap_false`) is unchanged and still
+  unverified on a real system.
+
 ## [2.2.0] - 2026-09-17
 
 ### Added
@@ -30,9 +110,10 @@ runtime as `zif_cloud_logger=>c_version`.
   commit. Numbers and setup in the README.
 
 ### Changed
-- Off-stack pipeline: the transpiler no longer runs its own syntax check
-  (`ignoreSyntaxCheck`); abaplint against the SAP API snapshot is the syntax
-  authority. Three `load( )` integration tests run in ADT only.
+- Off-stack pipeline: at release time the transpiler did not run its own syntax check
+  (`ignoreSyntaxCheck`) and three `load( )` integration tests ran in ADT only. Both were
+  lifted on `main` afterwards: the syntax check is on (`ignoreSyntaxCheck: false`) and the
+  `load( )` tests run off-stack.
 
 ## [2.1.0] - 2026-09-16
 

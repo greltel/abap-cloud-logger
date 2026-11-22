@@ -4,6 +4,14 @@
 "! kept in a table you can inspect through the normal query methods, saves and
 "! resets are counted. Inject it where production code receives a
 "! {@link zif_cloud_logger}; no <em>cl_abap_testdouble</em> configuration needed.
+"! The fake treats severities, BAPI return rows, exception keys, free text
+"! and searches exactly like {@link zcl_cloud_logger} - both use
+"! {@link zcl_cloud_logger_conversion}, and a contract test runs the same
+"! scenarios against both. T100 texts are resolved, so the text of an entry is
+"! the text production shows. What the fake does not have: an Application Log
+"! (handle and log object stay initial), a clock (<em>user_name</em>,
+"! <em>date</em> and <em>time</em> of an entry stay initial, the timer reports
+"! 0.000 seconds) and a text pool (its own diagnostics are English).
 "! The released-instance contract of the real logger is mimicked: after
 "! {@link zif_cloud_logger.METH:free} writing methods raise <em>instance_released</em>.
 CLASS zcl_cloud_logger_fake DEFINITION
@@ -22,8 +30,6 @@ CLASS zcl_cloud_logger_fake DEFINITION
     DATA released    TYPE abap_boolean READ-ONLY.
 
   PRIVATE SECTION.
-    TYPES free_text_buffer TYPE c LENGTH 200.
-
     DATA entries         TYPE zif_cloud_logger=>log_messages.
     DATA internal_errors TYPE zif_cloud_logger=>internal_errors.
     DATA context         TYPE string.
@@ -36,14 +42,19 @@ CLASS zcl_cloud_logger_fake DEFINITION
       IMPORTING symsg TYPE symsg
                 !text TYPE string.
 
+    " Text of a T100 message, with the fallback rule of the real logger
+    METHODS message_text
+      IMPORTING symsg         TYPE symsg
+                fallback      TYPE string OPTIONAL
+      RETURNING VALUE(result) TYPE string.
+
+    METHODS count_of
+      IMPORTING !type         TYPE symsgty
+      RETURNING VALUE(result) TYPE i.
+
     METHODS render
       IMPORTING entry         TYPE zif_cloud_logger=>t_log_messages
       RETURNING VALUE(result) TYPE zif_cloud_logger=>flat_message.
-
-    METHODS text_to_symsg
-      IMPORTING !text         TYPE string
-                msgty         TYPE symsgty
-      RETURNING VALUE(result) TYPE symsg.
 
 ENDCLASS.
 
@@ -53,7 +64,9 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
   METHOD zif_cloud_logger~log_string_add.
     self = me.
     ensure_active( ).
-    add( symsg = VALUE #( msgty = msgty )
+    add( symsg = VALUE #( msgty = zcl_cloud_logger_conversion=>normalized_severity(
+                                      msgty    = msgty
+                                      fallback = zif_cloud_logger=>c_default_message_attributes-type ) )
          text  = string ).
   ENDMETHOD.
 
@@ -65,11 +78,13 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    add( symsg = VALUE #( BASE symsg
-                          msgty = COND #( WHEN symsg-msgty IS NOT INITIAL
-                                          THEN symsg-msgty
-                                          ELSE zif_cloud_logger=>c_default_message_attributes-type ) )
-         text  = |{ symsg-msgid } { symsg-msgno } { symsg-msgv1 } { symsg-msgv2 } { symsg-msgv3 } { symsg-msgv4 }| ).
+    DATA(message) = VALUE symsg( BASE symsg
+                                 msgty = zcl_cloud_logger_conversion=>normalized_severity(
+                                             msgty    = symsg-msgty
+                                             fallback = zif_cloud_logger=>c_default_message_attributes-type ) ).
+
+    add( symsg = message
+         text  = message_text( message ) ).
   ENDMETHOD.
 
   METHOD zif_cloud_logger~log_syst_add.
@@ -90,7 +105,11 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    add( symsg = VALUE #( msgty = severity )
+    add( symsg = zcl_cloud_logger_conversion=>symsg_from_exception(
+                     exception = exception
+                     severity  = zcl_cloud_logger_conversion=>normalized_severity(
+                                     msgty    = severity
+                                     fallback = zif_cloud_logger=>c_message_type-error ) )
          text  = exception->get_text( ) ).
   ENDMETHOD.
 
@@ -98,39 +117,44 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
     self = me.
     ensure_active( ).
 
-    IF bapiret2 IS INITIAL.
+    DATA(severity) = zcl_cloud_logger_conversion=>normalized_severity(
+                         msgty    = bapiret2-type
+                         fallback = zif_cloud_logger=>c_message_type-success ).
+
+    IF bapiret2-id IS INITIAL.
+      " As in the real logger: the text is all there is, and a row without text is ignored
+      IF bapiret2-message IS NOT INITIAL.
+        zif_cloud_logger~log_string_add( string = CONV #( bapiret2-message )
+                                         msgty  = severity ).
+      ENDIF.
       RETURN.
     ENDIF.
 
-    add( symsg = VALUE #( msgid = bapiret2-id
-                          msgno = bapiret2-number
-                          msgty = bapiret2-type
-                          msgv1 = bapiret2-message_v1
-                          msgv2 = bapiret2-message_v2
-                          msgv3 = bapiret2-message_v3
-                          msgv4 = bapiret2-message_v4 )
-         text  = CONV #( bapiret2-message ) ).
+    DATA(symsg) = VALUE symsg( msgid = bapiret2-id
+                               msgno = bapiret2-number
+                               msgty = severity
+                               msgv1 = bapiret2-message_v1
+                               msgv2 = bapiret2-message_v2
+                               msgv3 = bapiret2-message_v3
+                               msgv4 = bapiret2-message_v4 ).
+
+    add( symsg = symsg
+         text  = message_text( symsg    = symsg
+                               fallback = CONV #( bapiret2-message ) ) ).
   ENDMETHOD.
 
   METHOD zif_cloud_logger~log_bapiret2_table_add.
     self = me.
     ensure_active( ).
 
-    " Same filter as the real logger: W keeps W/E/A/X, E keeps E/A/X, A or X keeps A/X
-    DATA(kept_types) = SWITCH string( min_severity
-      WHEN zif_cloud_logger=>c_message_type-abandon OR zif_cloud_logger=>c_message_type-terminate
-        THEN |{ zif_cloud_logger=>c_message_type-abandon }{ zif_cloud_logger=>c_message_type-terminate }|
-      WHEN zif_cloud_logger=>c_message_type-error
-        THEN |{ zif_cloud_logger=>c_message_type-error }{ zif_cloud_logger=>c_message_type-abandon }| &&
-             |{ zif_cloud_logger=>c_message_type-terminate }|
-      WHEN zif_cloud_logger=>c_message_type-warning
-        THEN |{ zif_cloud_logger=>c_message_type-warning }{ zif_cloud_logger=>c_message_type-error }| &&
-             |{ zif_cloud_logger=>c_message_type-abandon }{ zif_cloud_logger=>c_message_type-terminate }|
-      ELSE `` ).
+    LOOP AT bapiret2_t REFERENCE INTO DATA(row).
+      DATA(severity) = zcl_cloud_logger_conversion=>normalized_severity(
+                           msgty    = row->type
+                           fallback = zif_cloud_logger=>c_message_type-success ).
 
-    LOOP AT bapiret2_t REFERENCE INTO DATA(bapiret2).
-      IF kept_types IS INITIAL OR bapiret2->type CA kept_types.
-        zif_cloud_logger~log_bapiret2_structure_add( bapiret2->* ).
+      IF zcl_cloud_logger_conversion=>reaches_severity( severity = severity
+                                                        minimum  = min_severity ) = abap_true.
+        zif_cloud_logger~log_bapiret2_structure_add( row->* ).
       ENDIF.
     ENDLOOP.
   ENDMETHOD.
@@ -138,8 +162,16 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
   METHOD zif_cloud_logger~log_data_add.
     self = me.
     ensure_active( ).
-    add( symsg = VALUE #( msgty = msgty )
-         text  = xco_cp_json=>data->from_abap( data )->to_string( ) ).
+
+    TRY.
+        zif_cloud_logger~log_string_add( string = xco_cp_json=>data->from_abap( data )->to_string( )
+                                         msgty  = msgty ).
+
+      CATCH cx_root INTO DATA(error).
+        " As in the real logger, bad data becomes an error entry instead of an exception
+        add( symsg = VALUE #( msgty = zif_cloud_logger=>c_message_type-error )
+             text  = |Error serializing data to JSON: { error->get_text( ) }| ).
+    ENDTRY.
   ENDMETHOD.
 
   METHOD zif_cloud_logger~merge_logs.
@@ -152,6 +184,8 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
 
     INSERT LINES OF external_log->get_messages( )        INTO TABLE entries.
     INSERT LINES OF external_log->get_internal_errors( ) INTO TABLE internal_errors.
+
+    SORT internal_errors STABLE BY timestamp.
   ENDMETHOD.
 
   METHOD zif_cloud_logger~save_application_log.
@@ -202,8 +236,9 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
                       ( COND #( WHEN entry-symsg-msgid IS NOT INITIAL
                                 THEN zcx_cloud_logger_message=>new_message_from_symsg( entry-symsg )
                                 ELSE zcx_cloud_logger_message=>new_message_from_symsg(
-                                         text_to_symsg( text  = entry-message
-                                                        msgty = entry-symsg-msgty ) ) ) ) ).
+                                         zcl_cloud_logger_conversion=>text_to_symsg(
+                                             text  = entry-message
+                                             msgty = entry-symsg-msgty ) ) ) ) ).
   ENDMETHOD.
 
   METHOD zif_cloud_logger~get_handle.
@@ -219,9 +254,7 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
   METHOD zif_cloud_logger~get_message_count.
     result = COND #( WHEN msgty IS INITIAL
                      THEN lines( entries )
-                     ELSE REDUCE int4( INIT count = 0
-                                       FOR entry IN entries WHERE ( type = msgty )
-                                       NEXT count = count + 1 ) ).
+                     ELSE count_of( to_upper( msgty ) ) ).
   ENDMETHOD.
 
   METHOD zif_cloud_logger~log_is_empty.
@@ -233,30 +266,23 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_cloud_logger~log_contains_error.
-    result = xsdbool(
-         line_exists( entries[ type = zif_cloud_logger=>c_message_type-error ] )
-      OR line_exists( entries[ type = zif_cloud_logger=>c_message_type-abandon ] )
-      OR line_exists( entries[ type = zif_cloud_logger=>c_message_type-terminate ] ) ).
+    DATA(errors) = count_of( zif_cloud_logger=>c_message_type-error )
+                 + count_of( zif_cloud_logger=>c_message_type-abandon )
+                 + count_of( zif_cloud_logger=>c_message_type-terminate ).
+
+    result = xsdbool( errors > 0 ).
   ENDMETHOD.
 
   METHOD zif_cloud_logger~log_contains_warning.
-    result = xsdbool(
-         zif_cloud_logger~log_contains_error( ) = abap_true
-      OR line_exists( entries[ type = zif_cloud_logger=>c_message_type-warning ] ) ).
+    DATA(warnings) = count_of( zif_cloud_logger=>c_message_type-warning ).
+
+    result = xsdbool( zif_cloud_logger~log_contains_error( ) = abap_true OR warnings > 0 ).
   ENDMETHOD.
 
   METHOD zif_cloud_logger~search_message.
-    IF search IS INITIAL.
-      result = xsdbool( entries IS NOT INITIAL ).
-      RETURN.
-    ENDIF.
-
     LOOP AT entries REFERENCE INTO DATA(entry).
-      DATA(class_matches)  = xsdbool( search-msgid IS INITIAL OR entry->symsg-msgid = search-msgid ).
-      DATA(number_matches) = xsdbool( search-msgno IS INITIAL OR entry->symsg-msgno = search-msgno ).
-      DATA(type_matches)   = xsdbool( search-msgty IS INITIAL OR entry->symsg-msgty = search-msgty ).
-
-      IF class_matches = abap_true AND number_matches = abap_true AND type_matches = abap_true.
+      IF zcl_cloud_logger_conversion=>matches_search( symsg  = entry->symsg
+                                                      search = search ) = abap_true.
         result = abap_true.
         RETURN.
       ENDIF.
@@ -266,6 +292,12 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
   METHOD zif_cloud_logger~start_timer.
     self = me.
     ensure_active( ).
+
+    IF timer_running = abap_true.
+      add( symsg = VALUE #( msgty = zif_cloud_logger=>c_message_type-warning )
+           text  = `start_timer called twice without stop_timer - previous timer reset` ).
+    ENDIF.
+
     timer_running = abap_true.
   ENDMETHOD.
 
@@ -273,10 +305,15 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
     self = me.
     ensure_active( ).
 
-    IF timer_running = abap_true.
-      add( symsg = VALUE #( msgty = zif_cloud_logger=>c_message_type-information )
-           text  = |Timer Result: { text } took 0.000 seconds.| ).
+    IF timer_running = abap_false.
+      add( symsg = VALUE #( msgty = zif_cloud_logger=>c_message_type-warning )
+           text  = `Timer stopped but never started.` ).
+      RETURN.
     ENDIF.
+
+    " No clock behind the fake: the measured block always took no time
+    add( symsg = VALUE #( msgty = zif_cloud_logger=>c_message_type-information )
+         text  = |Timer Result: { text } took 0.000 seconds.| ).
 
     CLEAR timer_running.
   ENDMETHOD.
@@ -319,6 +356,27 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
                     context = context ) INTO TABLE entries.
   ENDMETHOD.
 
+  METHOD message_text.
+    TRY.
+        DATA(resolved) = xco_cp=>message( symsg )->get_text( ).
+
+      CATCH cx_root INTO DATA(error).
+        " Trailed like in the real logger; the fake has no clock, the time stamp stays initial
+        INSERT VALUE #( method     = `resolve_message_text`
+                        error_text = error->get_text( ) ) INTO TABLE internal_errors.
+    ENDTRY.
+
+    result = zcl_cloud_logger_conversion=>text_or_fallback( symsg    = symsg
+                                                            resolved = resolved
+                                                            fallback = fallback ).
+  ENDMETHOD.
+
+  METHOD count_of.
+    result = REDUCE #( INIT count = 0
+                       FOR entry IN entries WHERE ( type = type )
+                       NEXT count = count + 1 ).
+  ENDMETHOD.
+
   METHOD render.
     DATA(base) = COND string(
       WHEN entry-symsg-msgid IS INITIAL
@@ -328,20 +386,6 @@ CLASS zcl_cloud_logger_fake IMPLEMENTATION.
     result = COND #( WHEN entry-context IS NOT INITIAL
                      THEN |[{ entry-context }] { base }|
                      ELSE base ).
-  ENDMETHOD.
-
-  METHOD text_to_symsg.
-    DATA(buffer) = CONV free_text_buffer( text ).
-
-    result = VALUE #( msgid = zif_cloud_logger=>c_free_text_message-msgid
-                      msgno = zif_cloud_logger=>c_free_text_message-msgno
-                      msgty = COND #( WHEN msgty IS NOT INITIAL
-                                      THEN msgty
-                                      ELSE zif_cloud_logger=>c_message_type-information )
-                      msgv1 = buffer(50)
-                      msgv2 = buffer+50(50)
-                      msgv3 = buffer+100(50)
-                      msgv4 = buffer+150(50) ).
   ENDMETHOD.
 
 ENDCLASS.

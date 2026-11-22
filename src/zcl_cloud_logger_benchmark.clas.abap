@@ -1,7 +1,9 @@
 "! <p class="shorttext synchronized" lang="en">Cloud Logger benchmark - run with F9 in ADT</p>
 "! Measures the logger on the current system: time to add <em>entries</em>
 "! entries, to render and count them, to persist and to delete the log, and
-"! whether the emergency log mirror works. Prints the numbers on the console.
+"! whether the emergency log mirror works. Prints the numbers on the console,
+"! and after each run the internal error trail: a delete or a mirror that
+"! failed shows there, not as an exception.
 "! Nothing is kept unless <em>keep_persisted_log</em> is switched on. Memory is
 "! observed from outside (SM04 / SM50 during the run): the memory utilities
 "! are not released for ABAP Cloud.
@@ -37,6 +39,11 @@ CLASS zcl_cloud_logger_benchmark DEFINITION
     METHODS report
       IMPORTING label TYPE string
                 since TYPE utclong.
+
+    "! Prints what the logger swallowed during a run, e.g. a delete the database refused
+    METHODS report_trail
+      IMPORTING label  TYPE string
+                logger TYPE REF TO zif_cloud_logger.
 
 ENDCLASS.
 
@@ -97,6 +104,9 @@ CLASS zcl_cloud_logger_benchmark IMPLEMENTATION.
               since = started ).
     ENDIF.
 
+    report_trail( label  = `Volume run`
+                  logger = logger ).
+
     logger->free( ).
   ENDMETHOD.
 
@@ -113,13 +123,8 @@ CLASS zcl_cloud_logger_benchmark IMPLEMENTATION.
                                    msgno = '000' )
       )->log_exception_add( NEW cx_sy_zerodivide( ) ).
 
-    DATA(trail) = logger->get_internal_errors( ).
-
-    console->write( |Emergency log: 3 entries mirrored, { lines( trail ) } internal errors| ).
-
-    IF trail IS NOT INITIAL.
-      console->write( trail ).
-    ENDIF.
+    report_trail( label  = `Emergency log, 3 entries mirrored`
+                  logger = logger ).
 
     console->write( |Look for object { bench_object }, external id { emergency_ext_number } | &&
                     |in the Application Logs app / SLG1 to see what the XCO mirror wrote| ).
@@ -133,6 +138,16 @@ CLASS zcl_cloud_logger_benchmark IMPLEMENTATION.
 
     console->write( |{ label }: { elapsed DECIMALS = 3 } s | &&
                     |({ elapsed / entries * milliseconds DECIMALS = 3 } ms per entry)| ).
+  ENDMETHOD.
+
+  METHOD report_trail.
+    DATA(trail) = logger->get_internal_errors( ).
+
+    console->write( |{ label }: { lines( trail ) } internal errors| ).
+
+    IF trail IS NOT INITIAL.
+      console->write( trail ).
+    ENDIF.
   ENDMETHOD.
 
 ENDCLASS.

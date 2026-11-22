@@ -8,6 +8,34 @@ CLASS lth_plain_failure IMPLEMENTATION.
 ENDCLASS.
 
 
+"! T100 exception whose key names a numeric attribute
+CLASS lth_counted_failure DEFINITION FINAL FOR TESTING
+  INHERITING FROM cx_static_check.
+
+  PUBLIC SECTION.
+    INTERFACES if_t100_message.
+
+    DATA item_count TYPE i READ-ONLY.
+
+    METHODS constructor
+      IMPORTING item_count TYPE i.
+
+ENDCLASS.
+
+
+CLASS lth_counted_failure IMPLEMENTATION.
+
+  METHOD constructor.
+    super->constructor( ).
+    me->item_count = item_count.
+    if_t100_message~t100key = VALUE #( msgid = 'Z_CLOUD_LOGGER'
+                                       msgno = '003'
+                                       attr1 = 'ITEM_COUNT' ).
+  ENDMETHOD.
+
+ENDCLASS.
+
+
 CLASS ltc_cloud_logger DEFINITION FINAL
   FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
 
@@ -66,7 +94,6 @@ CLASS ltc_cloud_logger DEFINITION FINAL
     METHODS given_free_text_then_rap_wrap   FOR TESTING RAISING cx_static_check.
     METHODS given_abort_then_contains_err   FOR TESTING RAISING cx_static_check.
     METHODS when_display_unbound_no_dump    FOR TESTING RAISING cx_static_check.
-    METHODS given_explicit_default_expiry   FOR TESTING RAISING cx_static_check.
     METHODS given_error_then_object_known   FOR TESTING RAISING cx_static_check.
     METHODS given_msgno_000_then_t100_kept   FOR TESTING RAISING cx_static_check.
     METHODS given_saved_then_load_same  FOR TESTING RAISING cx_static_check.
@@ -102,6 +129,43 @@ CLASS ltc_cloud_logger DEFINITION FINAL
     METHODS given_50_saves_then_log_clean   FOR TESTING RAISING cx_static_check.
     METHODS given_trim_5_then_trail_5       FOR TESTING RAISING cx_static_check.
     METHODS given_other_freed_then_kept     FOR TESTING RAISING cx_static_check.
+
+    " severities
+    METHODS given_blank_str_sev_then_w      FOR TESTING RAISING cx_static_check.
+    METHODS given_blank_exc_sev_then_e      FOR TESTING RAISING cx_static_check.
+    METHODS given_lower_sev_then_upper      FOR TESTING RAISING cx_static_check.
+    METHODS given_lower_min_sev_filters     FOR TESTING RAISING cx_static_check.
+    METHODS given_lower_row_type_kept       FOR TESTING RAISING cx_static_check.
+    METHODS given_min_sev_w_then_keeps_3    FOR TESTING RAISING cx_static_check.
+    METHODS given_min_sev_a_then_keeps_a_x  FOR TESTING RAISING cx_static_check.
+    METHODS given_min_sev_x_then_keeps_a_x  FOR TESTING RAISING cx_static_check.
+    METHODS given_min_sev_i_then_keeps_all  FOR TESTING RAISING cx_static_check.
+
+    " BAPI return rows
+    METHODS given_text_only_ret2_then_kept  FOR TESTING RAISING cx_static_check.
+    METHODS given_type_only_ret2_ignored    FOR TESTING RAISING cx_static_check.
+    METHODS given_blank_ret2_type_then_s    FOR TESTING RAISING cx_static_check.
+    METHODS given_unknown_ret2_then_text    FOR TESTING RAISING cx_static_check.
+
+    " conversions and queries
+    METHODS given_blank_at_50_then_kept     FOR TESTING RAISING cx_static_check.
+    METHODS given_int_attr_then_unpadded    FOR TESTING RAISING cx_static_check.
+    METHODS given_unbound_exc_ignored       FOR TESTING RAISING cx_static_check.
+    METHODS given_msgv_search_then_matched  FOR TESTING RAISING cx_static_check.
+    METHODS given_other_msgv_search_false   FOR TESTING RAISING cx_static_check.
+    METHODS given_merge_then_counts_added   FOR TESTING RAISING cx_static_check.
+    METHODS given_reset_then_counts_zero    FOR TESTING RAISING cx_static_check.
+
+    " configuration checks
+    METHODS given_used_key_neg_trim_raises  FOR TESTING RAISING cx_static_check.
+    METHODS given_emergency_diff_raises     FOR TESTING RAISING cx_static_check.
+    METHODS given_emergency_no_obj_raises   FOR TESTING RAISING cx_static_check.
+
+    " Application Log items
+    METHODS given_context_then_item_prefix  FOR TESTING RAISING cx_static_check.
+    METHODS given_long_text_then_item_200   FOR TESTING RAISING cx_static_check.
+    METHODS when_merge_then_items_copied    FOR TESTING RAISING cx_static_check.
+    METHODS given_empty_saved_then_load_ok  FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -593,19 +657,6 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
                                         msg = `display( ) without viewer must be a harmless no-op` ).
   ENDMETHOD.
 
-  METHOD given_explicit_default_expiry.
-    " Spelling out the default expiry explicitly is the same configuration
-    DATA(default_expiry) = CONV d( cl_abap_context_info=>get_system_date( ) + zif_cloud_logger=>c_default_expiry_days ).
-
-    DATA(same) = zcl_cloud_logger=>get_instance( object      = test_object
-                                                 subobject   = test_subobject
-                                                 expiry_date = default_expiry ).
-
-    cl_abap_unit_assert=>assert_equals( act = same
-                                        exp = cut
-                                        msg = `The effective default expiry must not be reported as a conflict` ).
-  ENDMETHOD.
-
   METHOD given_error_then_object_known.
     TRY.
         zcl_cloud_logger=>get_instance( object    = test_object
@@ -1058,6 +1109,363 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
     small_logger->free( ).
   ENDMETHOD.
 
+  METHOD given_blank_str_sev_then_w.
+    cut->log_string_add( string = `no severity`
+                         msgty  = space ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( zif_cloud_logger=>c_message_type-warning )
+                                        exp = 1
+                                        msg = `Free text without severity must count as warning` ).
+  ENDMETHOD.
+
+  METHOD given_blank_exc_sev_then_e.
+    cut->log_exception_add( exception = NEW cx_sy_zerodivide( )
+                            severity  = space ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->log_contains_error( )
+                                        exp = abap_true
+                                        msg = `An exception without severity must count as error` ).
+  ENDMETHOD.
+
+  METHOD given_lower_sev_then_upper.
+    cut->log_string_add( string = `lower case`
+                         msgty  = 'e' ).
+
+    DATA(messages) = cut->get_messages( ).
+
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-type
+                                        exp = 'E'
+                                        msg = `A lower-case severity must be stored in upper case` ).
+    cl_abap_unit_assert=>assert_equals( act = cut->log_contains_error( )
+                                        exp = abap_true
+                                        msg = `The entry must be visible to the severity queries` ).
+  ENDMETHOD.
+
+  METHOD given_lower_min_sev_filters.
+    cut->log_bapiret2_table_add( bapiret2_t   = VALUE #( id     = 'Z_CLOUD_LOGGER'
+                                                         number = '002'
+                                                         ( type = 'S' )
+                                                         ( type = 'W' )
+                                                         ( type = 'E' ) )
+                                 min_severity = 'e' ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 1
+                                        msg = `A lower-case min_severity must filter like E` ).
+  ENDMETHOD.
+
+  METHOD given_lower_row_type_kept.
+    cut->log_bapiret2_table_add( bapiret2_t   = VALUE #( id     = 'Z_CLOUD_LOGGER'
+                                                         number = '002'
+                                                         ( type = 'e' ) )
+                                 min_severity = 'E' ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( zif_cloud_logger=>c_message_type-error )
+                                        exp = 1
+                                        msg = `A row with a lower-case type must pass the filter as error` ).
+  ENDMETHOD.
+
+  METHOD given_min_sev_w_then_keeps_3.
+    cut->log_bapiret2_table_add( bapiret2_t   = VALUE #( id     = 'Z_CLOUD_LOGGER'
+                                                         number = '002'
+                                                         ( type = 'S' )
+                                                         ( type = 'I' )
+                                                         ( type = 'W' )
+                                                         ( type = 'E' )
+                                                         ( type = 'A' ) )
+                                 min_severity = 'W' ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 3
+                                        msg = `min_severity W must keep W, E and A` ).
+  ENDMETHOD.
+
+  METHOD given_min_sev_a_then_keeps_a_x.
+    cut->log_bapiret2_table_add( bapiret2_t   = VALUE #( id     = 'Z_CLOUD_LOGGER'
+                                                         number = '002'
+                                                         ( type = 'E' )
+                                                         ( type = 'A' )
+                                                         ( type = 'X' ) )
+                                 min_severity = 'A' ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 2
+                                        msg = `min_severity A must keep A and X` ).
+  ENDMETHOD.
+
+  METHOD given_min_sev_x_then_keeps_a_x.
+    cut->log_bapiret2_table_add( bapiret2_t   = VALUE #( id     = 'Z_CLOUD_LOGGER'
+                                                         number = '002'
+                                                         ( type = 'E' )
+                                                         ( type = 'A' )
+                                                         ( type = 'X' ) )
+                                 min_severity = 'X' ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 2
+                                        msg = `min_severity X must keep A and X` ).
+  ENDMETHOD.
+
+  METHOD given_min_sev_i_then_keeps_all.
+    cut->log_bapiret2_table_add( bapiret2_t   = VALUE #( id     = 'Z_CLOUD_LOGGER'
+                                                         number = '002'
+                                                         ( type = 'S' )
+                                                         ( type = 'I' )
+                                                         ( type = 'W' ) )
+                                 min_severity = 'I' ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 3
+                                        msg = `min_severity I is no filter` ).
+  ENDMETHOD.
+
+  METHOD given_text_only_ret2_then_kept.
+    cut->log_bapiret2_structure_add( VALUE #( type    = 'E'
+                                              message = 'Custom text only' ) ).
+
+    DATA(messages) = cut->get_messages( ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( messages )
+                                        exp = 1
+                                        msg = `A row with a text but no message class must be logged` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-message
+                                        exp = `Custom text only`
+                                        msg = `The text of the BAPI must be kept` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-type
+                                        exp = 'E'
+                                        msg = `The severity of the row must be kept` ).
+  ENDMETHOD.
+
+  METHOD given_type_only_ret2_ignored.
+    cut->log_bapiret2_structure_add( VALUE #( type = 'S' ) ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 0
+                                        msg = `A row without message class and without text says nothing` ).
+  ENDMETHOD.
+
+  METHOD given_blank_ret2_type_then_s.
+    cut->log_bapiret2_structure_add( VALUE #( id         = 'Z_CLOUD_LOGGER'
+                                              number     = '002'
+                                              message_v1 = 'no type' ) ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( zif_cloud_logger=>c_message_type-success )
+                                        exp = 1
+                                        msg = `A BAPI row without type is a success message` ).
+  ENDMETHOD.
+
+  METHOD given_unknown_ret2_then_text.
+    cut->log_bapiret2_structure_add( VALUE #( type    = 'E'
+                                              id      = 'ZZ_NO_SUCH_CLASS'
+                                              number  = '999'
+                                              message = 'Text supplied by the BAPI' ) ).
+
+    DATA(messages) = cut->get_messages( ).
+
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-message
+                                        exp = `Text supplied by the BAPI`
+                                        msg = `A message that cannot be resolved must fall back to the BAPI text` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-symsg-msgid
+                                        exp = 'ZZ_NO_SUCH_CLASS'
+                                        msg = `The message key must be kept all the same` ).
+  ENDMETHOD.
+
+  METHOD given_blank_at_50_then_kept.
+    DATA(text) = |{ repeat( val = `a`
+                            occ = 49 ) } bbbbb|.
+
+    cut->log_string_add( text ).
+
+    DATA(rap)       = cut->get_messages_rap( ).
+    DATA(variables) = CAST if_t100_dyn_msg( rap[ 1 ] ).
+    MESSAGE ID zif_cloud_logger=>c_free_text_message-msgid TYPE 'S'
+            NUMBER zif_cloud_logger=>c_free_text_message-msgno
+            WITH variables->msgv1 variables->msgv2 variables->msgv3 variables->msgv4
+            INTO DATA(resolved).
+
+    cl_abap_unit_assert=>assert_equals( act = resolved
+                                        exp = text
+                                        msg = `A blank at position 50 must survive the RAP conversion` ).
+  ENDMETHOD.
+
+  METHOD given_int_attr_then_unpadded.
+    cut->log_exception_add( NEW lth_counted_failure( 42 ) ).
+
+    DATA(messages) = cut->get_messages( ).
+
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-symsg-msgv1
+                                        exp = '42'
+                                        msg = `A numeric T100 attribute must not be padded in the variable` ).
+  ENDMETHOD.
+
+  METHOD given_unbound_exc_ignored.
+    DATA(chained) = cut->log_exception_add( VALUE #( ) ).
+
+    cl_abap_unit_assert=>assert_bound( act = chained
+                                       msg = `Ignored call must still return the logger` ).
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 0
+                                        msg = `An unbound exception must not create an entry` ).
+  ENDMETHOD.
+
+  METHOD given_msgv_search_then_matched.
+    add_warning( 'abc' ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->search_message( VALUE #( msgid = 'CL'
+                                                                            msgv1 = 'abc' ) )
+                                        exp = abap_true
+                                        msg = `Search by class and variable must find the entry` ).
+  ENDMETHOD.
+
+  METHOD given_other_msgv_search_false.
+    add_warning( 'abc' ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->search_message( VALUE #( msgv1 = 'zzz' ) )
+                                        exp = abap_false
+                                        msg = `A different variable must not match` ).
+  ENDMETHOD.
+
+  METHOD given_merge_then_counts_added.
+    DATA(second) = secondary_logger( 'COUNTS' ).
+
+    TRY.
+        second->log_string_add( string = `merged error`
+                                msgty  = 'E' ).
+        cut->log_string_add( string = `own warning`
+                             msgty  = 'W' ).
+
+        cut->merge_logs( second ).
+
+        cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( 'E' )
+                                            exp = 1
+                                            msg = `Merged entries must be counted by severity` ).
+        cl_abap_unit_assert=>assert_equals( act = cut->log_contains_error( )
+                                            exp = abap_true
+                                            msg = `A merged error must be visible to the severity queries` ).
+
+      CLEANUP.
+        second->free( ).
+    ENDTRY.
+    second->free( ).
+  ENDMETHOD.
+
+  METHOD given_reset_then_counts_zero.
+    cut->log_string_add( string = `error before reset`
+                         msgty  = 'E' ).
+
+    cut->reset_appl_log( ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( 'E' )
+                                        exp = 0
+                                        msg = `A reset must clear the counts by severity` ).
+    cl_abap_unit_assert=>assert_equals( act = cut->log_contains_error( )
+                                        exp = abap_false
+                                        msg = `A reset logger must not report old errors` ).
+  ENDMETHOD.
+
+  METHOD given_used_key_neg_trim_raises.
+    TRY.
+        zcl_cloud_logger=>get_instance( object     = test_object
+                                        subobject  = test_subobject
+                                        trim_limit = -1 ).
+        cl_abap_unit_assert=>fail( `Negative trim_limit must raise, also for a registered key` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>invalid_trim_limit
+                                            msg = `An invalid value must not be reported as configuration conflict` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_emergency_diff_raises.
+    TRY.
+        zcl_cloud_logger=>get_instance( object               = test_object
+                                        subobject            = test_subobject
+                                        enable_emergency_log = abap_true ).
+        cl_abap_unit_assert=>fail( `Conflicting enable_emergency_log must raise` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>config_mismatch
+                                            msg = `Conflict must be reported as config_mismatch` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_emergency_no_obj_raises.
+    TRY.
+        zcl_cloud_logger=>get_instance( ext_number           = 'NO_OBJECT_EMERGENCY'
+                                        enable_emergency_log = abap_true
+                                        db_save              = abap_false ).
+        cl_abap_unit_assert=>fail( `An emergency log without object must raise` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>object_required
+                                            msg = `Missing object must be reported as object_required` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_context_then_item_prefix.
+    cut->set_context( `Order 1` ).
+
+    cut->log_string_add( `checked` ).
+
+    DATA(items) = cut->get_log_handle( )->get_all_items( ).
+
+    cl_abap_unit_assert=>assert_equals( act = items[ 1 ]-item->get_message_text( )
+                                        exp = `[Order 1] checked`
+                                        msg = `The persisted free text must carry the context prefix` ).
+  ENDMETHOD.
+
+  METHOD given_long_text_then_item_200.
+    cut->set_context( repeat( val = `c`
+                              occ = 150 ) ).
+
+    cut->log_string_add( repeat( val = `x`
+                                 occ = 100 ) ).
+
+    DATA(items) = cut->get_log_handle( )->get_all_items( ).
+
+    cl_abap_unit_assert=>assert_equals( act = strlen( items[ 1 ]-item->get_message_text( ) )
+                                        exp = 200
+                                        msg = `The Application Log keeps 200 characters, prefix included` ).
+  ENDMETHOD.
+
+  METHOD when_merge_then_items_copied.
+    " Needs the real Application Log runtime: the off-stack stub does not copy items
+    DATA(second) = secondary_logger( 'ITEMS' ).
+
+    TRY.
+        second->log_string_add( `one item` ).
+
+        cut->merge_logs( second ).
+
+        cl_abap_unit_assert=>assert_equals( act = lines( cut->get_log_handle( )->get_all_items( ) )
+                                            exp = 1
+                                            msg = `merge_logs must copy the Application Log items` ).
+
+      CLEANUP.
+        second->free( ).
+    ENDTRY.
+    second->free( ).
+  ENDMETHOD.
+
+  METHOD given_empty_saved_then_load_ok.
+    " Needs the real Application Log runtime: there, a log without items has no item table
+    cut->save_application_log( ).
+    DATA(handle) = cut->get_handle( ).
+    cut->free( ).
+
+    cut = zcl_cloud_logger=>load( handle ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 0
+                                        msg = `A log saved without entries must load empty` ).
+    cl_abap_unit_assert=>assert_equals( act = cut->get_handle( )
+                                        exp = handle
+                                        msg = `The loaded logger must be attached to the saved log` ).
+  ENDMETHOD.
+
 ENDCLASS.
 
 
@@ -1087,9 +1495,13 @@ CLASS ltd_fixed_system DEFINITION FINAL FOR TESTING.
       IMPORTING stamps TYPE time_stamps.
     METHODS set_message
       IMPORTING !message TYPE symsg.
+    "! Moves the system date, e.g. to the next day
+    METHODS set_date
+      IMPORTING !date TYPE d.
 
   PRIVATE SECTION.
     DATA last_stamp TYPE timestampl VALUE first_now.
+    DATA today      TYPE d          VALUE fixed_date.
     DATA message    TYPE symsg.
 ENDCLASS.
 
@@ -1104,12 +1516,12 @@ CLASS ltd_fixed_system IMPLEMENTATION.
     me->message = message.
   ENDMETHOD.
 
-  METHOD zif_cloud_logger_system~system_date.
-    result = fixed_date.
+  METHOD set_date.
+    today = date.
   ENDMETHOD.
 
-  METHOD zif_cloud_logger_system~system_time.
-    result = fixed_time.
+  METHOD zif_cloud_logger_system~system_date.
+    result = today.
   ENDMETHOD.
 
   METHOD zif_cloud_logger_system~now.
@@ -1144,8 +1556,20 @@ CLASS ltd_persistence_spy DEFINITION FINAL FOR TESTING.
     DATA load_calls           TYPE i                   READ-ONLY.
     DATA loaded_handle        TYPE balloghndl          READ-ONLY.
 
+    TYPES messages TYPE STANDARD TABLE OF symsg WITH EMPTY KEY.
+
+    DATA emergency_opens      TYPE i                                      READ-ONLY.
+    DATA emergency_object     TYPE cl_bali_header_setter=>ty_object       READ-ONLY.
+    DATA emergency_ext_id     TYPE cl_bali_header_setter=>ty_external_id  READ-ONLY.
+    DATA mirrored_messages    TYPE messages                               READ-ONLY.
+    DATA mirrored_exceptions  TYPE i                                      READ-ONLY.
+    DATA mirrored_severity    TYPE symsgty                                READ-ONLY.
+
     METHODS fail_next_save.
     METHODS fail_next_delete.
+    METHODS fail_next_load.
+    METHODS fail_next_open.
+    METHODS fail_next_mirror.
     "! What the next load_log( ) returns
     METHODS answer_load_with
       IMPORTING loaded TYPE zif_cloud_logger_persistence=>loaded_log.
@@ -1153,6 +1577,9 @@ CLASS ltd_persistence_spy DEFINITION FINAL FOR TESTING.
   PRIVATE SECTION.
     DATA fail_save   TYPE abap_boolean.
     DATA fail_delete TYPE abap_boolean.
+    DATA fail_load   TYPE abap_boolean.
+    DATA fail_open   TYPE abap_boolean.
+    DATA fail_mirror TYPE abap_boolean.
     DATA load_answer TYPE zif_cloud_logger_persistence=>loaded_log.
 ENDCLASS.
 
@@ -1164,6 +1591,50 @@ ENDCLASS.
 
 
 CLASS ltd_bali_failure IMPLEMENTATION.
+ENDCLASS.
+
+
+"! XCO reports problems with exceptions of the cx_no_check family; the spy
+"! raises this stand-in for a failing emergency log.
+CLASS ltd_xco_failure DEFINITION FINAL FOR TESTING
+  INHERITING FROM cx_no_check.
+ENDCLASS.
+
+
+CLASS ltd_xco_failure IMPLEMENTATION.
+ENDCLASS.
+
+
+"! Application Log that rejects one item, to reach the error paths of the
+"! logger without a database. Only add_item is needed.
+CLASS ltd_rejecting_log DEFINITION FINAL FOR TESTING.
+  PUBLIC SECTION.
+    INTERFACES if_bali_log PARTIALLY IMPLEMENTED.
+
+    DATA added_items TYPE i READ-ONLY.
+
+    "! The item with this serial number is rejected
+    METHODS reject_item
+      IMPORTING !number TYPE i.
+
+  PRIVATE SECTION.
+    DATA rejected_number TYPE i.
+ENDCLASS.
+
+
+CLASS ltd_rejecting_log IMPLEMENTATION.
+
+  METHOD reject_item.
+    rejected_number = number.
+  ENDMETHOD.
+
+  METHOD if_bali_log~add_item.
+    added_items += 1.
+    IF added_items = rejected_number.
+      RAISE EXCEPTION NEW ltd_bali_failure( ).
+    ENDIF.
+  ENDMETHOD.
+
 ENDCLASS.
 
 
@@ -1181,10 +1652,53 @@ CLASS ltd_persistence_spy IMPLEMENTATION.
     load_answer = loaded.
   ENDMETHOD.
 
+  METHOD fail_next_load.
+    fail_load = abap_true.
+  ENDMETHOD.
+
+  METHOD fail_next_open.
+    fail_open = abap_true.
+  ENDMETHOD.
+
+  METHOD fail_next_mirror.
+    fail_mirror = abap_true.
+  ENDMETHOD.
+
   METHOD zif_cloud_logger_persistence~load_log.
     load_calls   += 1.
     loaded_handle = handle.
-    result        = load_answer.
+    IF fail_load = abap_true.
+      CLEAR fail_load.
+      RAISE EXCEPTION NEW ltd_bali_failure( ).
+    ENDIF.
+    result = load_answer.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger_persistence~open_emergency_log.
+    IF fail_open = abap_true.
+      CLEAR fail_open.
+      RAISE EXCEPTION NEW ltd_xco_failure( ).
+    ENDIF.
+    emergency_opens += 1.
+    emergency_object = object.
+    emergency_ext_id = external_id.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger_persistence~mirror_message.
+    IF fail_mirror = abap_true.
+      CLEAR fail_mirror.
+      RAISE EXCEPTION NEW ltd_xco_failure( ).
+    ENDIF.
+    INSERT symsg INTO TABLE mirrored_messages.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger_persistence~mirror_exception.
+    IF fail_mirror = abap_true.
+      CLEAR fail_mirror.
+      RAISE EXCEPTION NEW ltd_xco_failure( ).
+    ENDIF.
+    mirrored_exceptions += 1.
+    mirrored_severity = severity.
   ENDMETHOD.
 
   METHOD zif_cloud_logger_persistence~save_log.
@@ -1217,9 +1731,13 @@ CLASS ltc_cloud_logger_isolated DEFINITION FINAL
     CONSTANTS test_object    TYPE cl_bali_header_setter=>ty_object    VALUE 'Z_CLOUD_LOG_SAMPLE'.
     CONSTANTS test_subobject TYPE cl_bali_header_setter=>ty_subobject VALUE 'SETUP'.
 
+    TYPES loggers TYPE STANDARD TABLE OF REF TO zif_cloud_logger WITH EMPTY KEY.
+
     DATA cut         TYPE REF TO zif_cloud_logger.
     DATA system      TYPE REF TO ltd_fixed_system.
     DATA persistence TYPE REF TO ltd_persistence_spy.
+    "! Loggers a test entered into the multiton registry; released in teardown
+    DATA registered  TYPE loggers.
 
     METHODS setup    RAISING cx_static_check.
     METHODS teardown.
@@ -1251,9 +1769,160 @@ CLASS ltc_cloud_logger_isolated DEFINITION FINAL
       RETURNING VALUE(result) TYPE REF TO zif_cloud_logger
       RAISING   cx_static_check.
 
+    " trail
+    METHODS given_trim_0_then_no_trail      FOR TESTING RAISING cx_static_check.
+    METHODS given_trim_1_then_newest_kept   FOR TESTING RAISING cx_static_check.
+    METHODS given_equal_stamps_order_kept   FOR TESTING RAISING cx_static_check.
+
+    " entries
+    METHODS given_one_stamp_then_date_time  FOR TESTING RAISING cx_static_check.
+    METHODS given_loaded_then_counts_right  FOR TESTING RAISING cx_static_check.
+
+    " a rejecting Application Log
+    METHODS given_item_rejected_raises      FOR TESTING RAISING cx_static_check.
+    METHODS given_row_rejected_rest_kept    FOR TESTING RAISING cx_static_check.
+    METHODS given_data_fails_then_error     FOR TESTING RAISING cx_static_check.
+    METHODS given_new_log_fails_no_delete   FOR TESTING RAISING cx_static_check.
+
+    " emergency log
+    METHODS given_emergency_then_opened     FOR TESTING RAISING cx_static_check.
+    METHODS given_no_ext_then_handle_id     FOR TESTING RAISING cx_static_check.
+    METHODS when_string_then_carrier_sent   FOR TESTING RAISING cx_static_check.
+    METHODS when_message_then_mirrored      FOR TESTING RAISING cx_static_check.
+    METHODS when_exception_then_sev_sent    FOR TESTING RAISING cx_static_check.
+    METHODS given_mirror_fails_then_trail   FOR TESTING RAISING cx_static_check.
+    METHODS when_reset_then_reopened        FOR TESTING RAISING cx_static_check.
+    METHODS given_open_fails_then_raises    FOR TESTING RAISING cx_static_check.
+    METHODS given_reopen_fails_then_trail   FOR TESTING RAISING cx_static_check.
+    METHODS given_no_emergency_no_mirror    FOR TESTING RAISING cx_static_check.
+
+    METHODS emergency_logger
+      IMPORTING ext_number    TYPE cl_bali_header_setter=>ty_external_id DEFAULT 'EMERGENCY'
+      RETURNING VALUE(result) TYPE REF TO zif_cloud_logger
+      RAISING   zcx_cloud_logger_error.
+
+    METHODS logger_on
+      IMPORTING !log          TYPE REF TO if_bali_log
+                !object       TYPE cl_bali_header_setter=>ty_object DEFAULT test_object
+      RETURNING VALUE(result) TYPE REF TO zif_cloud_logger
+      RAISING   zcx_cloud_logger_error.
+
+    " loading through the injected persistence
+    METHODS when_load_then_attached         FOR TESTING RAISING cx_static_check.
+    METHODS when_load_then_registered       FOR TESTING RAISING cx_static_check.
+    METHODS given_empty_log_then_loads      FOR TESTING RAISING cx_static_check.
+    METHODS given_unknown_handle_raises     FOR TESTING RAISING cx_static_check.
+    METHODS given_active_handle_raises      FOR TESTING RAISING cx_static_check.
+    METHODS given_active_key_raises         FOR TESTING RAISING cx_static_check.
+    METHODS given_neg_trim_then_no_read     FOR TESTING RAISING cx_static_check.
+
+    " registry and expiry
+    METHODS given_explicit_default_expiry   FOR TESTING RAISING cx_static_check.
+    METHODS given_reset_then_expiry_synced  FOR TESTING RAISING cx_static_check.
+
+    "! A log as the persistence adapter returns it: two items, two entries
+    METHODS persisted_log
+      RETURNING VALUE(result) TYPE zif_cloud_logger_persistence=>loaded_log
+      RAISING   cx_static_check.
+
+    "! Loads through the spy and remembers the logger for teardown
+    METHODS load_through_spy
+      IMPORTING handle        TYPE balloghndl DEFAULT 'HANDLE_OF_SAVED_LOG'
+                trim_limit    TYPE i          DEFAULT zif_cloud_logger=>c_default_trim_limit
+      RETURNING VALUE(result) TYPE REF TO zif_cloud_logger
+      RAISING   zcx_cloud_logger_error.
+
+    "! A logger with the injected doubles that is known to the multiton registry
+    METHODS registered_logger
+      IMPORTING ext_number    TYPE cl_bali_header_setter=>ty_external_id
+      RETURNING VALUE(result) TYPE REF TO zif_cloud_logger
+      RAISING   zcx_cloud_logger_error.
+
 ENDCLASS.
 
-CLASS zcl_cloud_logger DEFINITION LOCAL FRIENDS ltc_cloud_logger_isolated.
+"! Contract between {@link zcl_cloud_logger} and the test double
+"! {@link zcl_cloud_logger_fake}: every scenario runs against both, and both
+"! must show a consumer the same entries, renderings, counts and answers.
+"! Not compared, because the fake has neither: Application Log and clock
+"! (handle, item, user, date and time of an entry).
+CLASS ltc_logger_contract DEFINITION FINAL
+  FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+
+  PRIVATE SECTION.
+    TYPES loggers TYPE STANDARD TABLE OF REF TO zif_cloud_logger WITH EMPTY KEY.
+
+    TYPES:
+      BEGIN OF entry_view,
+        symsg   TYPE symsg,
+        message TYPE string,
+        type    TYPE symsgty,
+        context TYPE string,
+      END OF entry_view.
+    TYPES entry_views TYPE STANDARD TABLE OF entry_view WITH EMPTY KEY.
+
+    TYPES:
+      BEGIN OF rap_view,
+        t100key   TYPE scx_t100key,
+        variables TYPE symsg,
+        severity  TYPE if_abap_behv_message=>t_severity,
+      END OF rap_view.
+    TYPES rap_views TYPE STANDARD TABLE OF rap_view WITH EMPTY KEY.
+
+    TYPES:
+      "! Everything a consumer can ask a logger about its entries
+      BEGIN OF observation,
+        entries  TYPE entry_views,
+        flat     TYPE zif_cloud_logger=>flat_messages,
+        bapiret2 TYPE zif_cloud_logger=>bapiret2_messages,
+        rap      TYPE rap_views,
+        counts   TYPE string,
+        answers  TYPE string,
+      END OF observation.
+
+    DATA real TYPE REF TO zif_cloud_logger.
+    DATA fake TYPE REF TO zif_cloud_logger.
+    "! The real logger and the fake, to run one scenario against both
+    DATA both TYPE loggers.
+
+    METHODS setup RAISING cx_static_check.
+
+    METHODS when_free_text_then_same        FOR TESTING RAISING cx_static_check.
+    METHODS when_messages_then_same         FOR TESTING RAISING cx_static_check.
+    METHODS when_bapiret2_rows_then_same    FOR TESTING RAISING cx_static_check.
+    METHODS when_bapiret2_table_then_same   FOR TESTING RAISING cx_static_check.
+    METHODS when_exceptions_then_same       FOR TESTING RAISING cx_static_check.
+    METHODS when_context_then_same          FOR TESTING RAISING cx_static_check.
+    METHODS when_timer_misused_then_same    FOR TESTING RAISING cx_static_check.
+    METHODS when_timer_used_then_same       FOR TESTING RAISING cx_static_check.
+    METHODS when_data_then_same             FOR TESTING RAISING cx_static_check.
+    METHODS when_long_text_then_same        FOR TESTING RAISING cx_static_check.
+    METHODS when_searched_then_same         FOR TESTING RAISING cx_static_check.
+    METHODS when_reset_then_same            FOR TESTING RAISING cx_static_check.
+    METHODS when_merged_then_same           FOR TESTING RAISING cx_static_check.
+    METHODS when_freed_then_same            FOR TESTING RAISING cx_static_check.
+
+    METHODS observed
+      IMPORTING logger        TYPE REF TO zif_cloud_logger
+      RETURNING VALUE(result) TYPE observation.
+
+    METHODS rap_view_of
+      IMPORTING logger        TYPE REF TO zif_cloud_logger
+      RETURNING VALUE(result) TYPE rap_views.
+
+    "! One character per probe search: X for a hit, a dash for a miss
+    METHODS search_answers
+      IMPORTING logger        TYPE REF TO zif_cloud_logger
+      RETURNING VALUE(result) TYPE string.
+
+    "! Fails unless the fake shows what the real logger shows; the number of
+    "! entries is given so that two empty loggers cannot pass as equal
+    METHODS assert_same_with
+      IMPORTING entries TYPE i.
+
+ENDCLASS.
+
+
+CLASS zcl_cloud_logger DEFINITION LOCAL FRIENDS ltc_cloud_logger_isolated ltc_logger_contract.
 
 
 CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
@@ -1266,9 +1935,13 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
 
   METHOD teardown.
     cut->free( ).
+    LOOP AT registered INTO DATA(logger).
+      logger->free( ).
+    ENDLOOP.
     CLEAR cut.
     CLEAR system.
     CLEAR persistence.
+    CLEAR registered.
   ENDMETHOD.
 
   METHOD create_logger.
@@ -1450,7 +2123,7 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
                                         msg = `A plain reset must not touch the database` ).
   ENDMETHOD.
 
-  METHOD attach_to_prepared_log.
+  METHOD persisted_log.
     " A log "read from the database": a real in-memory BAL object plus the
     " entries the persistence adapter would have mapped from its items
     DATA(persisted) = cl_bali_log=>create( ).
@@ -1459,14 +2132,21 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
     persisted->add_item( cl_bali_free_text_setter=>create( severity = 'W'
                                                            text     = 'persisted warning' ) ).
 
-    DATA(loaded) = VALUE zif_cloud_logger_persistence=>loaded_log(
-        log         = persisted
-        object      = test_object
-        subobject   = test_subobject
-        external_id = 'LOADED'
-        expiry_date = '20301231'
-        entries     = VALUE #( ( symsg = VALUE #( msgty = 'E' ) type = 'E' message = `persisted error` )
-                               ( symsg = VALUE #( msgty = 'W' ) type = 'W' message = `persisted warning` ) ) ).
+    result = VALUE #( log         = persisted
+                      object      = test_object
+                      subobject   = test_subobject
+                      external_id = 'LOADED'
+                      expiry_date = '20301231'
+                      entries     = VALUE #( ( symsg   = VALUE #( msgty = 'E' )
+                                               type    = 'E'
+                                               message = `persisted error` )
+                                             ( symsg   = VALUE #( msgty = 'W' )
+                                               type    = 'W'
+                                               message = `persisted warning` ) ) ).
+  ENDMETHOD.
+
+  METHOD attach_to_prepared_log.
+    DATA(loaded) = persisted_log( ).
 
     result = NEW zcl_cloud_logger( object      = loaded-object
                                    subobject   = loaded-subobject
@@ -1475,6 +2155,26 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
                                    system      = system
                                    persistence = persistence
                                    loaded_log  = loaded ).
+  ENDMETHOD.
+
+  METHOD load_through_spy.
+    result = zcl_cloud_logger=>load_from( handle      = handle
+                                          trim_limit  = trim_limit
+                                          persistence = persistence ).
+    INSERT result INTO TABLE registered.
+  ENDMETHOD.
+
+  METHOD registered_logger.
+    DATA(logger) = NEW zcl_cloud_logger( object      = test_object
+                                         subobject   = test_subobject
+                                         ext_number  = ext_number
+                                         db_save     = abap_false
+                                         system      = system
+                                         persistence = persistence ).
+
+    zcl_cloud_logger=>register( logger ).
+    INSERT logger INTO TABLE registered.
+    result = logger.
   ENDMETHOD.
 
   METHOD given_loaded_then_history_kept.
@@ -1554,6 +2254,791 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( act = lines( cut->get_internal_errors( ) )
                                         exp = 1
                                         msg = `The failed delete must be recorded in the internal trail` ).
+  ENDMETHOD.
+
+  METHOD emergency_logger.
+    result = NEW zcl_cloud_logger( object               = test_object
+                                   subobject            = test_subobject
+                                   ext_number           = ext_number
+                                   db_save              = abap_false
+                                   enable_emergency_log = abap_true
+                                   system               = system
+                                   persistence          = persistence ).
+  ENDMETHOD.
+
+  METHOD logger_on.
+    " Attached like a loaded log, so the logger writes to the given Application Log
+    result = NEW zcl_cloud_logger( object      = object
+                                   subobject   = test_subobject
+                                   ext_number  = 'ON_DOUBLE'
+                                   system      = system
+                                   persistence = persistence
+                                   loaded_log  = VALUE #( log = log ) ).
+  ENDMETHOD.
+
+  METHOD given_trim_0_then_no_trail.
+    DATA(silent) = NEW zcl_cloud_logger( object      = test_object
+                                         subobject   = test_subobject
+                                         ext_number  = 'TRIM_0'
+                                         db_save     = abap_false
+                                         trim_limit  = 0
+                                         system      = system
+                                         persistence = persistence ).
+
+    silent->save_application_log( )->save_application_log( ).
+
+    cl_abap_unit_assert=>assert_initial( act = silent->get_internal_errors( )
+                                         msg = `trim_limit 0 must switch the trail off` ).
+  ENDMETHOD.
+
+  METHOD given_trim_1_then_newest_kept.
+    system->queue_stamps( VALUE #( ( ltd_fixed_system=>first_now )
+                                   ( ltd_fixed_system=>second_now ) ) ).
+    DATA(short_memory) = NEW zcl_cloud_logger( object      = test_object
+                                               subobject   = test_subobject
+                                               ext_number  = 'TRIM_1'
+                                               db_save     = abap_false
+                                               trim_limit  = 1
+                                               system      = system
+                                               persistence = persistence ).
+
+    short_memory->save_application_log( )->save_application_log( ).
+
+    DATA(trail) = short_memory->get_internal_errors( ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( trail )
+                                        exp = 1
+                                        msg = `trim_limit 1 must keep exactly one trail entry` ).
+    cl_abap_unit_assert=>assert_equals( act = trail[ 1 ]-timestamp
+                                        exp = ltd_fixed_system=>second_now
+                                        msg = `The oldest entry must be evicted first` ).
+  ENDMETHOD.
+
+  METHOD given_equal_stamps_order_kept.
+    " Every trail entry gets the same time stamp: the merge must not shuffle them.
+    " The kernel sorts unstably unless told otherwise; the off-stack sort is stable.
+    DATA(target) = create_logger( abap_false ).
+    DATA(other)  = create_logger( abap_true ).
+    target->save_application_log( ).
+    persistence->fail_next_delete( ).
+    other->reset_appl_log( abap_true ).
+    persistence->fail_next_save( ).
+    TRY.
+        other->save_application_log( ).
+      CATCH zcx_cloud_logger_error ##NO_HANDLER.
+    ENDTRY.
+    DATA(expected) = target->get_internal_errors( ).
+    INSERT LINES OF other->get_internal_errors( ) INTO TABLE expected.
+
+    target->merge_logs( other ).
+
+    cl_abap_unit_assert=>assert_equals( act = target->get_internal_errors( )
+                                        exp = expected
+                                        msg = `Entries with equal time stamps must keep their order` ).
+  ENDMETHOD.
+
+  METHOD given_one_stamp_then_date_time.
+    system->queue_stamps( VALUE #( ( ltd_fixed_system=>after_midnight )
+                                   ( ltd_fixed_system=>second_now ) ) ).
+
+    cut->log_string_add( `just after midnight` ).
+
+    DATA(messages) = cut->get_messages( ).
+
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-date
+                                        exp = CONV d( '20260917' )
+                                        msg = `The entry date must come from the entry's time stamp` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-time
+                                        exp = CONV t( '000001' )
+                                        msg = `The entry time must come from the same time stamp` ).
+    cl_abap_unit_assert=>assert_equals( act = lines( system->queued_stamps )
+                                        exp = 1
+                                        msg = `The clock must be read once per entry` ).
+  ENDMETHOD.
+
+  METHOD given_loaded_then_counts_right.
+    DATA(loaded_logger) = attach_to_prepared_log( ).
+
+    cl_abap_unit_assert=>assert_equals( act = loaded_logger->get_message_count( 'W' )
+                                        exp = 1
+                                        msg = `Loaded entries must be counted by severity` ).
+    cl_abap_unit_assert=>assert_equals( act = loaded_logger->log_contains_warning( )
+                                        exp = abap_true
+                                        msg = `Loaded warnings must be visible to the severity queries` ).
+  ENDMETHOD.
+
+  METHOD given_item_rejected_raises.
+    DATA(log) = NEW ltd_rejecting_log( ).
+    log->reject_item( 1 ).
+    DATA(logger) = logger_on( log ).
+
+    TRY.
+        logger->log_string_add( `rejected` ).
+        cl_abap_unit_assert=>fail( `A rejected item must raise` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>error_in_logging
+                                            msg = `A rejected item must be reported as error_in_logging` ).
+        cl_abap_unit_assert=>assert_bound( act = error->previous
+                                           msg = `The original cx_bali_runtime must be chained as previous` ).
+        cl_abap_unit_assert=>assert_equals( act = logger->get_message_count( )
+                                            exp = 0
+                                            msg = `A rejected item must not appear in the internal log` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_row_rejected_rest_kept.
+    DATA(log) = NEW ltd_rejecting_log( ).
+    log->reject_item( 2 ).
+    DATA(logger) = logger_on( log ).
+
+    TRY.
+        logger->log_bapiret2_table_add( VALUE #( id     = 'Z_CLOUD_LOGGER'
+                                                 number = '002'
+                                                 type   = 'E'
+                                                 ( message_v1 = 'first' )
+                                                 ( message_v1 = 'second' )
+                                                 ( message_v1 = 'third' ) ) ).
+        cl_abap_unit_assert=>fail( `The rejected row must be reported after the table was processed` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>error_in_logging
+                                            msg = `The rejected row must be reported as error_in_logging` ).
+        cl_abap_unit_assert=>assert_equals( act = logger->get_message_count( )
+                                            exp = 2
+                                            msg = `The rows after a rejected one must still be logged` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_data_fails_then_error.
+    DATA(log) = NEW ltd_rejecting_log( ).
+    log->reject_item( 1 ).
+    DATA(logger) = logger_on( log ).
+
+    DATA(chained) = logger->log_data_add( `payload` ).
+
+    DATA(messages) = logger->get_messages( ).
+
+    cl_abap_unit_assert=>assert_bound( act = chained
+                                       msg = `log_data_add must not break the chain` ).
+    cl_abap_unit_assert=>assert_equals( act = lines( messages )
+                                        exp = 1
+                                        msg = `The failure must be logged as one entry` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-type
+                                        exp = 'E'
+                                        msg = `The failure entry must be an error` ).
+  ENDMETHOD.
+
+  METHOD given_new_log_fails_no_delete.
+    " The attached logger names an object that does not exist, so a reset cannot
+    " create the successor log
+    DATA(logger) = logger_on( log    = cl_bali_log=>create( )
+                              object = 'Z_DUMMY_WRONG' ).
+
+    TRY.
+        logger->reset_appl_log( abap_true ).
+        cl_abap_unit_assert=>fail( `A reset that cannot create a new log must raise` ).
+
+      CATCH zcx_cloud_logger_error.
+        cl_abap_unit_assert=>assert_equals( act = persistence->delete_calls
+                                            exp = 0
+                                            msg = `The persisted log must stay when its successor cannot be created` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_emergency_then_opened.
+    emergency_logger( ).
+
+    cl_abap_unit_assert=>assert_equals( act = persistence->emergency_opens
+                                        exp = 1
+                                        msg = `The emergency log must be opened once at creation` ).
+    cl_abap_unit_assert=>assert_equals( act = persistence->emergency_object
+                                        exp = test_object
+                                        msg = `The emergency log must use the logger's object` ).
+    cl_abap_unit_assert=>assert_equals( act = persistence->emergency_ext_id
+                                        exp = 'EMERGENCY'
+                                        msg = `The emergency log must use the logger's external id` ).
+  ENDMETHOD.
+
+  METHOD given_no_ext_then_handle_id.
+    DATA(logger) = emergency_logger( space ).
+
+    cl_abap_unit_assert=>assert_equals( act = persistence->emergency_ext_id
+                                        exp = logger->get_handle( )
+                                        msg = `Without external id the main log's handle must be used` ).
+  ENDMETHOD.
+
+  METHOD when_string_then_carrier_sent.
+    DATA(logger) = emergency_logger( ).
+
+    logger->log_string_add( string = `mirrored text`
+                            msgty  = 'E' ).
+
+    cl_abap_unit_assert=>assert_equals(
+        act = persistence->mirrored_messages
+        exp = VALUE ltd_persistence_spy=>messages( ( msgty = 'E'
+                                                     msgid = zif_cloud_logger=>c_free_text_message-msgid
+                                                     msgno = zif_cloud_logger=>c_free_text_message-msgno
+                                                     msgv1 = 'mirrored text' ) )
+        msg = `Free text must be mirrored as carrier message with its severity` ).
+  ENDMETHOD.
+
+  METHOD when_message_then_mirrored.
+    DATA(logger)  = emergency_logger( ).
+    DATA(message) = VALUE symsg( msgty = 'W'
+                                 msgid = 'CL'
+                                 msgno = '000'
+                                 msgv1 = 'mirrored' ).
+
+    logger->log_message_add( message ).
+
+    cl_abap_unit_assert=>assert_equals( act = persistence->mirrored_messages
+                                        exp = VALUE ltd_persistence_spy=>messages( ( message ) )
+                                        msg = `A T100 message must be mirrored unchanged` ).
+  ENDMETHOD.
+
+  METHOD when_exception_then_sev_sent.
+    DATA(logger) = emergency_logger( ).
+
+    logger->log_exception_add( exception = NEW cx_sy_zerodivide( )
+                               severity  = 'W' ).
+
+    cl_abap_unit_assert=>assert_equals( act = persistence->mirrored_exceptions
+                                        exp = 1
+                                        msg = `An exception must be mirrored once` ).
+    cl_abap_unit_assert=>assert_equals( act = persistence->mirrored_severity
+                                        exp = 'W'
+                                        msg = `The severity of the exception must reach the emergency log` ).
+  ENDMETHOD.
+
+  METHOD given_mirror_fails_then_trail.
+    DATA(logger) = emergency_logger( ).
+    persistence->fail_next_mirror( ).
+
+    logger->log_string_add( `main log survives` ).
+
+    cl_abap_unit_assert=>assert_equals( act = logger->get_message_count( )
+                                        exp = 1
+                                        msg = `A failing mirror must not cost the main log its entry` ).
+    cl_abap_unit_assert=>assert_equals( act = lines( logger->get_internal_errors( ) )
+                                        exp = 1
+                                        msg = `A failing mirror must be recorded in the internal trail` ).
+  ENDMETHOD.
+
+  METHOD when_reset_then_reopened.
+    DATA(logger) = emergency_logger( space ).
+
+    logger->reset_appl_log( ).
+
+    cl_abap_unit_assert=>assert_equals( act = persistence->emergency_opens
+                                        exp = 2
+                                        msg = `A reset must open a new emergency log` ).
+    cl_abap_unit_assert=>assert_equals( act = persistence->emergency_ext_id
+                                        exp = logger->get_handle( )
+                                        msg = `The new emergency log must belong to the new main log` ).
+  ENDMETHOD.
+
+  METHOD given_open_fails_then_raises.
+    persistence->fail_next_open( ).
+
+    TRY.
+        emergency_logger( ).
+        cl_abap_unit_assert=>fail( `An emergency log that cannot be opened must raise at creation` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>error_in_emergency_log
+                                            msg = `The failure must be reported as error_in_emergency_log` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_reopen_fails_then_trail.
+    DATA(logger) = emergency_logger( ).
+    persistence->fail_next_open( ).
+
+    logger->reset_appl_log( ).
+    logger->log_string_add( `after the reset` ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( logger->get_internal_errors( ) )
+                                        exp = 1
+                                        msg = `A failing re-creation must only be trailed` ).
+    cl_abap_unit_assert=>assert_initial( act = persistence->mirrored_messages
+                                         msg = `Nothing is mirrored while no emergency log is open` ).
+  ENDMETHOD.
+
+  METHOD given_no_emergency_no_mirror.
+    cut->log_string_add( `not mirrored` ).
+
+    cl_abap_unit_assert=>assert_equals( act = persistence->emergency_opens
+                                        exp = 0
+                                        msg = `Without enable_emergency_log no emergency log is opened` ).
+    cl_abap_unit_assert=>assert_initial( act = persistence->mirrored_messages
+                                         msg = `Without enable_emergency_log nothing is mirrored` ).
+  ENDMETHOD.
+
+  METHOD when_load_then_attached.
+    persistence->answer_load_with( persisted_log( ) ).
+
+    DATA(loaded_logger) = load_through_spy( handle = 'HANDLE_OF_SAVED_LOG' ).
+
+    cl_abap_unit_assert=>assert_equals( act = persistence->load_calls
+                                        exp = 1
+                                        msg = `The log must be read from the persistence once` ).
+    cl_abap_unit_assert=>assert_equals( act = persistence->loaded_handle
+                                        exp = 'HANDLE_OF_SAVED_LOG'
+                                        msg = `The requested handle must reach the persistence` ).
+    cl_abap_unit_assert=>assert_equals( act = loaded_logger->get_message_count( )
+                                        exp = 2
+                                        msg = `The persisted items must be the history of the logger` ).
+  ENDMETHOD.
+
+  METHOD when_load_then_registered.
+    persistence->answer_load_with( persisted_log( ) ).
+
+    DATA(loaded_logger) = load_through_spy( ).
+
+    cl_abap_unit_assert=>assert_equals( act = zcl_cloud_logger=>get_instance( object     = test_object
+                                                                              subobject  = test_subobject
+                                                                              ext_number = 'LOADED' )
+                                        exp = loaded_logger
+                                        msg = `A loaded logger must be reachable under the key of its log` ).
+  ENDMETHOD.
+
+  METHOD given_empty_log_then_loads.
+    persistence->answer_load_with( VALUE #( log         = cl_bali_log=>create( )
+                                            object      = test_object
+                                            subobject   = test_subobject
+                                            external_id = 'EMPTY' ) ).
+
+    DATA(loaded_logger) = load_through_spy( ).
+
+    cl_abap_unit_assert=>assert_equals( act = loaded_logger->log_is_empty( )
+                                        exp = abap_true
+                                        msg = `A log without items must load as an empty logger` ).
+
+    loaded_logger->log_string_add( `first entry after loading` ).
+
+    cl_abap_unit_assert=>assert_equals( act = loaded_logger->get_message_count( )
+                                        exp = 1
+                                        msg = `An empty loaded logger must accept entries` ).
+  ENDMETHOD.
+
+  METHOD given_unknown_handle_raises.
+    persistence->fail_next_load( ).
+
+    TRY.
+        load_through_spy( ).
+        cl_abap_unit_assert=>fail( `A handle the database does not know must raise` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>error_in_loading
+                                            msg = `The failure must be reported as error_in_loading` ).
+        cl_abap_unit_assert=>assert_bound( act = error->previous
+                                           msg = `The original cx_bali_runtime must be chained as previous` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_active_handle_raises.
+    DATA(active) = registered_logger( 'ACTIVE_HANDLE' ).
+
+    TRY.
+        load_through_spy( handle = active->get_handle( ) ).
+        cl_abap_unit_assert=>fail( `A log held by a live logger must not be loaded again` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>already_active
+                                            msg = `The conflict must be reported as already_active` ).
+        cl_abap_unit_assert=>assert_equals( act = persistence->load_calls
+                                            exp = 0
+                                            msg = `The session check must come before the database read` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_active_key_raises.
+    registered_logger( 'LOADED' ).
+    persistence->answer_load_with( persisted_log( ) ).
+
+    TRY.
+        load_through_spy( ).
+        cl_abap_unit_assert=>fail( `A key that is in use must not be taken over by a loaded log` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>already_active
+                                            msg = `The conflict must be reported as already_active` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_neg_trim_then_no_read.
+    TRY.
+        load_through_spy( trim_limit = -1 ).
+        cl_abap_unit_assert=>fail( `A negative trim_limit must raise` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>invalid_trim_limit
+                                            msg = `The value must be reported as invalid_trim_limit` ).
+        cl_abap_unit_assert=>assert_equals( act = persistence->load_calls
+                                            exp = 0
+                                            msg = `An invalid value must be rejected before the database is read` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_explicit_default_expiry.
+    " Spelling out the default expiry explicitly is the same configuration
+    DATA(logger)         = registered_logger( 'DEFAULT_EXPIRY' ).
+    DATA(default_expiry) = CONV d( ltd_fixed_system=>fixed_date + zif_cloud_logger=>c_default_expiry_days ).
+
+    DATA(same) = zcl_cloud_logger=>get_instance( object      = test_object
+                                                 subobject   = test_subobject
+                                                 ext_number  = 'DEFAULT_EXPIRY'
+                                                 expiry_date = default_expiry ).
+
+    cl_abap_unit_assert=>assert_equals( act = same
+                                        exp = logger
+                                        msg = `The effective default expiry must not be reported as a conflict` ).
+  ENDMETHOD.
+
+  METHOD given_reset_then_expiry_synced.
+    " The log created by a reset on the next day expires a day later, and the
+    " registry must know: the new default is the configuration from then on
+    DATA(logger)     = registered_logger( 'RESET_EXPIRY' ).
+    DATA(next_day)   = CONV d( ltd_fixed_system=>fixed_date + 1 ).
+    DATA(new_expiry) = CONV d( next_day + zif_cloud_logger=>c_default_expiry_days ).
+    system->set_date( next_day ).
+
+    logger->reset_appl_log( ).
+
+    DATA(same) = zcl_cloud_logger=>get_instance( object      = test_object
+                                                 subobject   = test_subobject
+                                                 ext_number  = 'RESET_EXPIRY'
+                                                 expiry_date = new_expiry ).
+
+    cl_abap_unit_assert=>assert_equals( act = same
+                                        exp = logger
+                                        msg = `After a reset the new default expiry must not be a conflict` ).
+  ENDMETHOD.
+
+ENDCLASS.
+
+
+CLASS ltc_logger_contract IMPLEMENTATION.
+
+  METHOD setup.
+    real = NEW zcl_cloud_logger( object      = 'Z_CLOUD_LOG_SAMPLE'
+                                 subobject   = 'SETUP'
+                                 ext_number  = 'CONTRACT'
+                                 db_save     = abap_false
+                                 system      = NEW ltd_fixed_system( )
+                                 persistence = NEW ltd_persistence_spy( ) ).
+    fake = NEW zcl_cloud_logger_fake( ).
+    both = VALUE #( ( real ) ( fake ) ).
+  ENDMETHOD.
+
+  METHOD when_free_text_then_same.
+    LOOP AT both INTO DATA(logger).
+      logger->log_string_add( `default severity` ).
+      logger->log_string_add( string = `error`
+                              msgty  = 'E' ).
+      logger->log_string_add( string = `lower-case error`
+                              msgty  = 'e' ).
+      logger->log_string_add( string = `no severity`
+                              msgty  = space ).
+      logger->log_string_add( string = `unknown severity`
+                              msgty  = '?' ).
+    ENDLOOP.
+
+    assert_same_with( 5 ).
+  ENDMETHOD.
+
+  METHOD when_messages_then_same.
+    LOOP AT both INTO DATA(logger).
+      logger->log_message_add( VALUE #( msgty = 'E'
+                                        msgid = 'Z_CLOUD_LOGGER'
+                                        msgno = '002'
+                                        msgv1 = 'ZORDER' ) ).
+      logger->log_message_add( VALUE #( msgid = 'Z_CLOUD_LOGGER'
+                                        msgno = '008' ) ).
+      logger->log_message_add( VALUE #( msgty = 'w'
+                                        msgid = 'ZZ_NO_SUCH_CLASS'
+                                        msgno = '999'
+                                        msgv1 = 'kept' ) ).
+      logger->log_message_add( VALUE #( ) ).
+    ENDLOOP.
+
+    assert_same_with( 3 ).
+  ENDMETHOD.
+
+  METHOD when_bapiret2_rows_then_same.
+    LOOP AT both INTO DATA(logger).
+      logger->log_bapiret2_structure_add( VALUE #( type    = 'E'
+                                                   message = 'Text without message class' ) ).
+      logger->log_bapiret2_structure_add( VALUE #( type = 'S' ) ).
+      logger->log_bapiret2_structure_add( VALUE #( id         = 'Z_CLOUD_LOGGER'
+                                                   number     = '002'
+                                                   message_v1 = 'ZORDER' ) ).
+      logger->log_bapiret2_structure_add( VALUE #( type    = 'E'
+                                                   id      = 'ZZ_NO_SUCH_CLASS'
+                                                   number  = '999'
+                                                   message = 'Text supplied by the BAPI' ) ).
+      logger->log_bapiret2_structure_add( VALUE #( type    = 'W'
+                                                   id      = 'Z_CLOUD_LOGGER'
+                                                   number  = '008'
+                                                   message = 'Text the BAPI filled in another language' ) ).
+    ENDLOOP.
+
+    assert_same_with( 4 ).
+  ENDMETHOD.
+
+  METHOD when_bapiret2_table_then_same.
+    LOOP AT both INTO DATA(logger).
+      logger->log_bapiret2_table_add( bapiret2_t   = VALUE #( id     = 'Z_CLOUD_LOGGER'
+                                                              number = '002'
+                                                              ( type = 'S' )
+                                                              ( type = 'w' )
+                                                              ( type = 'E' )
+                                                              ( type = space )
+                                                              ( type = 'A' ) )
+                                      min_severity = 'w' ).
+    ENDLOOP.
+
+    assert_same_with( 3 ).
+  ENDMETHOD.
+
+  METHOD when_exceptions_then_same.
+    DATA(dynamic) = zcx_cloud_logger_message=>new_message( class    = 'CL'
+                                                           number   = '000'
+                                                           severity = if_abap_behv_message=>severity-error
+                                                           v1       = 'first'
+                                                           v2       = 'second' ).
+
+    LOOP AT both INTO DATA(logger).
+      logger->log_exception_add( NEW lth_counted_failure( 42 ) ).
+      logger->log_exception_add( exception = NEW cx_sy_zerodivide( )
+                                 severity  = space ).
+      logger->log_exception_add( exception = CAST #( dynamic )
+                                 severity  = 'w' ).
+      logger->log_exception_add( NEW lth_plain_failure( ) ).
+      logger->log_exception_add( VALUE #( ) ).
+    ENDLOOP.
+
+    assert_same_with( 4 ).
+  ENDMETHOD.
+
+  METHOD when_context_then_same.
+    LOOP AT both INTO DATA(logger).
+      logger->set_context( `Order 1` ).
+      logger->log_string_add( `checked` ).
+      logger->log_message_add( VALUE #( msgty = 'S'
+                                        msgid = 'Z_CLOUD_LOGGER'
+                                        msgno = '008' ) ).
+      logger->log_exception_add( NEW cx_sy_zerodivide( ) ).
+      logger->clear_context( ).
+      logger->log_string_add( `done` ).
+    ENDLOOP.
+
+    assert_same_with( 4 ).
+  ENDMETHOD.
+
+  METHOD when_timer_misused_then_same.
+    LOOP AT both INTO DATA(logger).
+      logger->stop_timer( `never started` ).
+      logger->start_timer( ).
+      logger->start_timer( ).
+    ENDLOOP.
+
+    assert_same_with( 2 ).
+  ENDMETHOD.
+
+  METHOD when_timer_used_then_same.
+    " The fixed clock of the real logger does not move, the fake has none: 0.000 seconds
+    LOOP AT both INTO DATA(logger).
+      logger->start_timer( ).
+      logger->stop_timer( `block` ).
+      logger->stop_timer( `stopped twice` ).
+    ENDLOOP.
+
+    assert_same_with( 2 ).
+  ENDMETHOD.
+
+  METHOD when_data_then_same.
+    LOOP AT both INTO DATA(logger).
+      logger->log_data_add( data  = VALUE bapiret2( type = 'E'
+                                                    id   = 'CL' )
+                            msgty = 'i' ).
+      logger->log_data_add( `plain text` ).
+    ENDLOOP.
+
+    assert_same_with( 2 ).
+  ENDMETHOD.
+
+  METHOD when_long_text_then_same.
+    DATA(long_text) = |{ repeat( val = `a`
+                                 occ = 49 ) } { repeat( val = `word `
+                                                        occ = 60 ) }|.
+
+    LOOP AT both INTO DATA(logger).
+      logger->log_string_add( long_text ).
+    ENDLOOP.
+
+    assert_same_with( 1 ).
+  ENDMETHOD.
+
+  METHOD when_searched_then_same.
+    LOOP AT both INTO DATA(logger).
+      logger->log_message_add( VALUE #( msgty = 'E'
+                                        msgid = 'Z_CLOUD_LOGGER'
+                                        msgno = '002'
+                                        msgv1 = 'ZORDER' ) ).
+      logger->log_string_add( `free text` ).
+    ENDLOOP.
+
+    cl_abap_unit_assert=>assert_equals( act = search_answers( fake )
+                                        exp = search_answers( real )
+                                        msg = `The fake must answer every search like the real logger` ).
+    cl_abap_unit_assert=>assert_equals( act = search_answers( real )
+                                        exp = `XXX--X-`
+                                        msg = `The probe searches must cover hits and misses` ).
+  ENDMETHOD.
+
+  METHOD when_reset_then_same.
+    LOOP AT both INTO DATA(logger).
+      logger->set_context( `before` ).
+      logger->log_string_add( string = `gone after the reset`
+                              msgty  = 'E' ).
+      logger->start_timer( ).
+      logger->reset_appl_log( ).
+      logger->stop_timer( `timer was reset as well` ).
+    ENDLOOP.
+
+    assert_same_with( 1 ).
+  ENDMETHOD.
+
+  METHOD when_merged_then_same.
+    DATA(other) = CAST zif_cloud_logger( NEW zcl_cloud_logger_fake( ) ).
+    other->set_context( `other log` ).
+    other->log_string_add( string = `merged error`
+                           msgty  = 'E' ).
+    other->log_message_add( VALUE #( msgty = 'S'
+                                     msgid = 'Z_CLOUD_LOGGER'
+                                     msgno = '008' ) ).
+
+    LOOP AT both INTO DATA(logger).
+      logger->log_string_add( `own entry` ).
+      logger->merge_logs( other ).
+      logger->merge_logs( logger ).
+      logger->merge_logs( VALUE #( ) ).
+    ENDLOOP.
+
+    assert_same_with( 3 ).
+  ENDMETHOD.
+
+  METHOD when_freed_then_same.
+    TYPES t100keys TYPE STANDARD TABLE OF scx_t100key WITH EMPTY KEY.
+
+    DATA refusals TYPE t100keys.
+
+    LOOP AT both INTO DATA(logger).
+      logger->log_string_add( `released with the logger` ).
+      logger->free( ).
+
+      TRY.
+          logger->log_string_add( `after free` ).
+        CATCH zcx_cloud_logger_error INTO DATA(error).
+          INSERT error->if_t100_message~t100key INTO TABLE refusals.
+      ENDTRY.
+    ENDLOOP.
+
+    cl_abap_unit_assert=>assert_equals(
+        act = refusals
+        exp = VALUE t100keys( ( zcx_cloud_logger_error=>instance_released )
+                              ( zcx_cloud_logger_error=>instance_released ) )
+        msg = `Both must refuse to write after free( ) with instance_released` ).
+    assert_same_with( 0 ).
+  ENDMETHOD.
+
+  METHOD observed.
+    result-entries  = CORRESPONDING #( logger->get_messages( ) ).
+    result-flat     = logger->get_messages_flat( ).
+    result-bapiret2 = logger->get_messages_as_bapiret2( ).
+    result-rap      = rap_view_of( logger ).
+    result-counts   = |all { logger->get_message_count( ) }| &&
+                      | I { logger->get_message_count( 'I' ) }| &&
+                      | S { logger->get_message_count( 'S' ) }| &&
+                      | W { logger->get_message_count( 'W' ) }| &&
+                      | E { logger->get_message_count( 'E' ) }| &&
+                      | A { logger->get_message_count( 'A' ) }| &&
+                      | X { logger->get_message_count( 'X' ) }| &&
+                      | e { logger->get_message_count( 'e' ) }|.
+    result-answers  = |empty { logger->log_is_empty( ) }| &&
+                      | messages { logger->log_contains_messages( ) }| &&
+                      | error { logger->log_contains_error( ) }| &&
+                      | warning { logger->log_contains_warning( ) }| &&
+                      | search { search_answers( logger ) }|.
+  ENDMETHOD.
+
+  METHOD rap_view_of.
+    LOOP AT logger->get_messages_rap( ) INTO DATA(message).
+      DATA(variables) = CAST if_t100_dyn_msg( message ).
+
+      INSERT VALUE #( t100key   = CAST if_t100_message( message )->t100key
+                      variables = VALUE #( msgty = variables->msgty
+                                           msgv1 = variables->msgv1
+                                           msgv2 = variables->msgv2
+                                           msgv3 = variables->msgv3
+                                           msgv4 = variables->msgv4 )
+                      severity  = message->m_severity ) INTO TABLE result.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD search_answers.
+    DATA(probes) = VALUE zif_cloud_logger=>bapiret2_messages( ( )
+                                                              ( id = 'Z_CLOUD_LOGGER' )
+                                                              ( id = 'Z_CLOUD_LOGGER' number = '002' type = 'E' )
+                                                              ( id = 'Z_CLOUD_LOGGER' number = '003' )
+                                                              ( type = 'A' )
+                                                              ( message_v1 = 'ZORDER' )
+                                                              ( id = 'Z_CLOUD_LOGGER' message_v1 = 'OTHER' ) ).
+
+    LOOP AT probes REFERENCE INTO DATA(probe).
+      result = result && COND string( WHEN logger->search_message( VALUE #( msgid = probe->id
+                                                                            msgno = probe->number
+                                                                            msgty = probe->type
+                                                                            msgv1 = probe->message_v1 ) ) = abap_true
+                                      THEN `X`
+                                      ELSE `-` ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD assert_same_with.
+    DATA(of_real) = observed( real ).
+    DATA(of_fake) = observed( fake ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( of_real-entries )
+                                        exp = entries
+                                        msg = `The scenario must leave the expected number of entries in the logger` ).
+    cl_abap_unit_assert=>assert_equals( act = of_fake-entries
+                                        exp = of_real-entries
+                                        msg = `The fake must keep the same message key, text, severity and context` ).
+    cl_abap_unit_assert=>assert_equals( act = of_fake-flat
+                                        exp = of_real-flat
+                                        msg = `The fake must render the same flat lines` ).
+    cl_abap_unit_assert=>assert_equals( act = of_fake-bapiret2
+                                        exp = of_real-bapiret2
+                                        msg = `The fake must return the same BAPI return table` ).
+    cl_abap_unit_assert=>assert_equals( act = of_fake-rap
+                                        exp = of_real-rap
+                                        msg = `The fake must return the same RAP messages` ).
+    cl_abap_unit_assert=>assert_equals( act = of_fake-counts
+                                        exp = of_real-counts
+                                        msg = `The fake must count like the real logger` ).
+    cl_abap_unit_assert=>assert_equals( act = of_fake-answers
+                                        exp = of_real-answers
+                                        msg = `The fake must answer the queries like the real logger` ).
   ENDMETHOD.
 
 ENDCLASS.

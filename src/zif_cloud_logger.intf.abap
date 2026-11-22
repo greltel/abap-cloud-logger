@@ -24,7 +24,8 @@ INTERFACE zif_cloud_logger
   TYPES:
     "! One entry of the internal (in-memory) log.
     BEGIN OF t_log_messages,
-      "! Message key and variables; only msgty is filled for free text and exceptions
+      "! Message key and variables. Free text and exceptions without T100 key
+      "! fill only msgty
       symsg     TYPE symsg,
       "! Resolved message text, never truncated
       message   TYPE string,
@@ -32,11 +33,11 @@ INTERFACE zif_cloud_logger
       type      TYPE symsgty,
       "! Sticky context active when the entry was added (see {@link zif_cloud_logger.METH:set_context})
       context   TYPE string,
-      "! User that added the entry (alias when maintained, technical name otherwise)
+      "! Technical name of the user that added the entry
       user_name TYPE syuname,
-      "! System date when the entry was added
+      "! Date the entry was added, UTC
       date      TYPE xsddate_d,
-      "! System time when the entry was added
+      "! Time the entry was added, UTC - taken from the same time stamp as the date
       time      TYPE xsdtime_t,
       "! The Application Log item that was written for this entry
       item      TYPE REF TO if_bali_item_setter,
@@ -128,7 +129,10 @@ INTERFACE zif_cloud_logger
   "! Appends all entries of another logger (Application Log items, internal log
   "! and internal error trail) to this one. The other logger is left unchanged.
   "! An unbound reference or the logger itself is ignored; Application Log
-  "! failures go to the internal error trail.
+  "! failures go to the internal error trail. Merge a logger once: nothing is
+  "! de-duplicated, a second merge of the same logger appends its entries again.
+  "! Merged entries are not mirrored to the emergency log - the other logger
+  "! mirrored them itself if it had one.
   "! @parameter external_log           | Logger whose entries are copied
   "! @parameter self                   | This logger, for chaining
   "! @raising   zcx_cloud_logger_error | The instance was released with free( )
@@ -142,7 +146,7 @@ INTERFACE zif_cloud_logger
   "! The Application Log stores at most 200 characters of free text (prefix included);
   "! longer texts are cut there, never in the internal log.
   "! @parameter string                 | Text to log (not truncated internally)
-  "! @parameter msgty                  | Severity, defaults to warning
+  "! @parameter msgty                  | Severity in upper or lower case; blank or unknown becomes warning
   "! @parameter self                   | This logger, for chaining
   "! @raising   zcx_cloud_logger_error | The Application Log rejected the entry, or the instance was released
   METHODS log_string_add
@@ -152,7 +156,8 @@ INTERFACE zif_cloud_logger
     RAISING   zcx_cloud_logger_error.
 
   "! Adds a T100 message given as SYMSG structure. An initial structure is ignored;
-  "! a missing severity defaults to warning.
+  "! a blank or unknown severity becomes warning, a lower-case one is stored in
+  "! upper case.
   "! @parameter symsg                  | Message type, class, number and variables
   "! @parameter self                   | This logger, for chaining
   "! @raising   zcx_cloud_logger_error | The Application Log rejected the entry, or the instance was released
@@ -173,8 +178,10 @@ INTERFACE zif_cloud_logger
   "! the Application Log receives the exception object itself. For exceptions with
   "! a T100 key ({@link if_t100_message}) the key and its variables are kept, so
   "! {@link zif_cloud_logger.METH:search_message}, the RAP and the BAPIRET2
-  "! conversions see the real message. An unbound reference is ignored.
-  "! @parameter severity               | Severity, defaults to error
+  "! conversions see the real message. A key attribute that is not elementary
+  "! (a table, a structure, a reference) yields an empty variable; numbers and
+  "! dates are formatted like in a string template. An unbound reference is ignored.
+  "! @parameter severity               | Severity in upper or lower case; blank or unknown becomes error
   "! @parameter exception              | Exception to log
   "! @parameter self                   | This logger, for chaining
   "! @raising   zcx_cloud_logger_error | The Application Log rejected the entry, or the instance was released
@@ -187,17 +194,26 @@ INTERFACE zif_cloud_logger
   "! Adds a table of BAPI return structures, optionally keeping only entries at
   "! or above a severity: <em>W</em> keeps W/E/A/X, <em>E</em> keeps E/A/X,
   "! <em>A</em> or <em>X</em> keeps A/X. No filter (or I/S) keeps everything.
+  "! Rows are treated like in {@link zif_cloud_logger.METH:log_bapiret2_structure_add};
+  "! a row without type counts as success for the filter. A row the Application
+  "! Log rejects does not stop the table: the rows behind it are still added,
+  "! and the first rejection is raised afterwards.
   "! @parameter bapiret2_t             | BAPI return table
-  "! @parameter min_severity           | Lowest severity to keep
+  "! @parameter min_severity           | Lowest severity to keep, upper or lower case
   "! @parameter self                   | This logger, for chaining
-  "! @raising   zcx_cloud_logger_error | The Application Log rejected an entry, or the instance was released
+  "! @raising   zcx_cloud_logger_error | The Application Log rejected an entry (the first rejection,
+  "!                                     raised after all rows were processed), or the instance was released
   METHODS log_bapiret2_table_add
     IMPORTING bapiret2_t   TYPE bapiret2_messages
               min_severity TYPE symsgty OPTIONAL
     RETURNING VALUE(self)  TYPE REF TO zif_cloud_logger
     RAISING   zcx_cloud_logger_error.
 
-  "! Adds one BAPI return structure. An initial structure is ignored.
+  "! Adds one BAPI return structure. A blank type means success. A row with a
+  "! message class is added as T100 message; if that message cannot be resolved,
+  "! the text the BAPI supplied in <em>message</em> is kept instead. A row
+  "! without message class is added as free text when it has a <em>message</em>,
+  "! and ignored otherwise.
   "! @parameter bapiret2               | BAPI return structure
   "! @parameter self                   | This logger, for chaining
   "! @raising   zcx_cloud_logger_error | The Application Log rejected the entry, or the instance was released
@@ -222,7 +238,9 @@ INTERFACE zif_cloud_logger
 
   "! Persists the log via {@link cl_bali_log_db}. The caller owns the commit.
   "! With <em>db_save = abap_false</em> the call is a no-op that is recorded in
-  "! the internal error trail only.
+  "! the internal error trail only. One Application Log holds at most 999,999
+  "! items. The log is saved with <em>keep_until_expiry</em>: it stays on the
+  "! database until its expiry date.
   "! @parameter use_2nd_db_connection      | Save on a separate DB connection (own commit)
   "! @parameter assign_to_current_appl_job | Attach the log to the running application job
   "! @parameter self                       | This logger, for chaining
@@ -250,8 +268,11 @@ INTERFACE zif_cloud_logger
   METHODS get_messages_as_bapiret2
     RETURNING VALUE(result) TYPE bapiret2_messages.
 
-  "! Returns the entries as RAP behavior messages. Free-text and exception
-  "! entries are wrapped in {@link zif_cloud_logger.DATA:c_free_text_message} (200 characters).
+  "! Returns the entries as RAP behavior messages. T100 messages, and exceptions
+  "! that carry a T100 key, keep their own key. Free text and exceptions without
+  "! T100 key are wrapped in {@link zif_cloud_logger.DATA:c_free_text_message}
+  "! (200 characters). The messages carry no <em>%tky</em> or <em>%element</em>:
+  "! the caller builds the <em>reported</em> rows and binds them (see README).
   "! @parameter result | Messages for a RAP <em>reported</em> response
   METHODS get_messages_rap
     RETURNING VALUE(result) TYPE rap_messages.
@@ -266,8 +287,9 @@ INTERFACE zif_cloud_logger
   METHODS get_log_handle
     RETURNING VALUE(result) TYPE REF TO if_bali_log.
 
-  "! Counts entries, optionally of one severity only.
-  "! @parameter msgty  | Severity to count; initial counts all entries
+  "! Counts entries, optionally of one severity only. The counts are kept with
+  "! the entries, so the call does not scan the log.
+  "! @parameter msgty  | Severity to count, upper or lower case; initial counts all entries
   "! @parameter result | Number of matching entries
   METHODS get_message_count
     IMPORTING msgty         TYPE symsgty OPTIONAL
@@ -275,7 +297,14 @@ INTERFACE zif_cloud_logger
 
   "! Discards all entries and starts a fresh Application Log with the same
   "! configuration. Timer and context are cleared as well. The instance stays
-  "! registered and usable.
+  "! registered and usable. The fresh log is created first: if that fails, the
+  "! old log is left as it is, in memory and on the database. Deleting needs
+  "! the authorization S_APPL_LOG with activity 06, and the log was saved with
+  "! <em>keep_until_expiry</em>, which SAP documents as "not allowed to delete
+  "! the log before the expiry date". A delete the database refuses is recorded
+  "! in the internal error trail and does not stop the reset. With an emergency
+  "! log, a new one is opened for the fresh log; what was mirrored before stays
+  "! on the database.
   "! @parameter delete_from_db         | Also delete the persisted log, if it was saved
   "! @raising   zcx_cloud_logger_error | A fresh Application Log could not be created, or the instance was released
   METHODS reset_appl_log
@@ -298,11 +327,11 @@ INTERFACE zif_cloud_logger
   METHODS log_contains_warning
     RETURNING VALUE(result) TYPE abap_boolean.
 
-  "! Checks whether an entry matches the given message class, number and/or
-  "! severity. Initial components are not compared; a completely initial
-  "! search matches any entry. Message number 000 is the initial value of the
-  "! NUMC field and therefore means "any number".
-  "! @parameter search | Message key parts to match
+  "! Checks whether an entry matches the given message class, number, severity
+  "! and/or message variables. Initial components are not compared; a completely
+  "! initial search matches any entry. Message number 000 is the initial value
+  "! of the NUMC field and therefore means "any number".
+  "! @parameter search | Message key parts and variables to match
   "! @parameter result | abap_true when at least one entry matches
   METHODS search_message
     IMPORTING !search       TYPE symsg
@@ -313,7 +342,8 @@ INTERFACE zif_cloud_logger
   "! <em>instance_released</em>, queries return empty results. The next
   "! {@link zcl_cloud_logger.METH:get_instance} with the same key creates a
   "! new instance. Calling free( ) twice is harmless, also on a stale reference
-  "! after a new instance was created.
+  "! after a new instance was created. Nothing is deleted from the database:
+  "! a saved log and the entries of an emergency log stay until they expire.
   METHODS free.
 
   "! Starts the stopwatch. Calling it again before {@link zif_cloud_logger.METH:stop_timer}
@@ -341,6 +371,9 @@ INTERFACE zif_cloud_logger
 
   "! Sets a sticky context that is attached to every following entry until
   "! {@link zif_cloud_logger.METH:clear_context}, e.g. the document currently processed.
+  "! Every entry of the internal log carries it, and the flat rendering shows it
+  "! for all of them. In the persisted Application Log only free text is
+  "! prefixed: T100 messages and exceptions are stored as they are.
   "! @parameter context | Context text, shown as <em>[context]</em> prefix
   "! @parameter self    | This logger, for chaining
   METHODS set_context

@@ -17,22 +17,14 @@ CLASS zcl_cloud_logger_system IMPLEMENTATION.
     result = cl_abap_context_info=>get_system_date( ).
   ENDMETHOD.
 
-  METHOD zif_cloud_logger_system~system_time.
-    result = cl_abap_context_info=>get_system_time( ).
-  ENDMETHOD.
-
   METHOD zif_cloud_logger_system~now.
     GET TIME STAMP FIELD result.
   ENDMETHOD.
 
   METHOD zif_cloud_logger_system~user_name.
-    " The alias is the readable name on SAP BTP but is often not maintained
-    " on-premise; the technical name is always filled.
-    result = cl_abap_context_info=>get_user_alias( ).
-
-    IF result IS INITIAL.
-      result = cl_abap_context_info=>get_user_technical_name( ).
-    ENDIF.
+    " The technical name is always filled and always fits; the alias is optional
+    " on-premise and longer than the user name field of a log entry.
+    result = cl_abap_context_info=>get_user_technical_name( ).
   ENDMETHOD.
 
   METHOD zif_cloud_logger_system~current_message.
