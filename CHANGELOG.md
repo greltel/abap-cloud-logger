@@ -5,10 +5,14 @@ All notable changes to ABAP Cloud Logger are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The installed version is available at
 runtime as `zif_cloud_logger=>c_version`.
 
-## [Unreleased]
+## [2.3.0] - 2026-11-22
 
 Hardening after a full audit of 2.2.0. No signature of the released API changed; the
 behaviour changes are listed under *Changed* and *Fixed*.
+
+Verified on S/4HANA 2023 FPS03 (ABAP 7.58): 198 ABAP Unit tests green in ADT, and the
+benchmark run (20,000 entries, emergency-log mirror, delete of the saved log) without an
+entry in the internal error trail.
 
 ### Fixed
 - BAPIRET2 rows without a message class lost their text (the entry read `E::000`). Such a
