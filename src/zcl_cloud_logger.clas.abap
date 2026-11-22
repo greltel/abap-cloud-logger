@@ -1151,11 +1151,11 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD stamp_date.
-    result = CONV d( |{ CONV int8( trunc( stamp ) ) DIV time_part_divisor }| ).
+    result = |{ CONV int8( trunc( stamp ) ) DIV time_part_divisor }|.
   ENDMETHOD.
 
   METHOD stamp_time.
-    result = CONV t( |{ CONV int8( trunc( stamp ) ) MOD time_part_divisor WIDTH = 6 PAD = '0' ALIGN = RIGHT }| ).
+    result = |{ CONV int8( trunc( stamp ) ) MOD time_part_divisor WIDTH = 6 PAD = '0' ALIGN = RIGHT }|.
   ENDMETHOD.
 
 ENDCLASS.
