@@ -35,9 +35,10 @@ INTERFACE zif_cloud_logger
       context   TYPE string,
       "! Technical name of the user that added the entry
       user_name TYPE syuname,
-      "! Date the entry was added, UTC
+      "! System date when the entry was added (UTC for entries read back by load)
       date      TYPE xsddate_d,
-      "! Time the entry was added, UTC - taken from the same time stamp as the date
+      "! System time when the entry was added, read together with the date
+      "! (UTC for entries read back by load)
       time      TYPE xsdtime_t,
       "! The Application Log item that was written for this entry
       item      TYPE REF TO if_bali_item_setter,
@@ -239,8 +240,8 @@ INTERFACE zif_cloud_logger
   "! Persists the log via {@link cl_bali_log_db}. The caller owns the commit.
   "! With <em>db_save = abap_false</em> the call is a no-op that is recorded in
   "! the internal error trail only. One Application Log holds at most 999,999
-  "! items. The log is saved with <em>keep_until_expiry</em>: it stays on the
-  "! database until its expiry date.
+  "! items. The log is saved with <em>keep_until_expiry</em>, so housekeeping
+  "! leaves it alone until its expiry date.
   "! @parameter use_2nd_db_connection      | Save on a separate DB connection (own commit)
   "! @parameter assign_to_current_appl_job | Attach the log to the running application job
   "! @parameter self                       | This logger, for chaining
@@ -299,10 +300,10 @@ INTERFACE zif_cloud_logger
   "! configuration. Timer and context are cleared as well. The instance stays
   "! registered and usable. The fresh log is created first: if that fails, the
   "! old log is left as it is, in memory and on the database. Deleting needs
-  "! the authorization S_APPL_LOG with activity 06, and the log was saved with
-  "! <em>keep_until_expiry</em>, which SAP documents as "not allowed to delete
-  "! the log before the expiry date". A delete the database refuses is recorded
-  "! in the internal error trail and does not stop the reset. With an emergency
+  "! the authorization S_APPL_LOG with activity 06. A delete the database
+  "! refuses is recorded in the internal error trail and does not stop the
+  "! reset, so check {@link zif_cloud_logger.METH:get_internal_errors} when the
+  "! delete matters. With an emergency
   "! log, a new one is opened for the fresh log; what was mirrored before stays
   "! on the database.
   "! @parameter delete_from_db         | Also delete the persisted log, if it was saved

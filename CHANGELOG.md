@@ -38,8 +38,11 @@ behaviour changes are listed under *Changed* and *Fixed*.
 - `get_instance( )` with a negative `trim_limit` for a key that is in use raised
   `config_mismatch` instead of `invalid_trim_limit`; `load( )` validated `trim_limit` only
   after reading the database.
-- `enable_emergency_log = abap_true` without an Application Log object raised
-  `error_in_emergency_log`; it raises `object_required` (message 006, text adjusted).
+- A logger without Application Log object never worked on a real system: the Application
+  Log refuses the header, which surfaced as `error_in_creation` (or, with the emergency
+  log, as `error_in_emergency_log`). Off-stack it passed because the stub skips that check.
+  `get_instance( )` without object raises `object_required` now, whatever `db_save` says
+  (message 006, text adjusted), and the README no longer promises otherwise.
 - Emergency log: exceptions were mirrored without their severity; the external id of a
   logger without `ext_number` was a UUID nobody could read back, generated outside the
   error handling. The handle of the main log is used instead.
@@ -54,8 +57,9 @@ behaviour changes are listed under *Changed* and *Fixed*.
   logged no timer warnings and raised on data that cannot be serialized.
 
 ### Changed
-- Entry `date` and `time` are UTC and come from one time stamp per entry (they used to be
-  two separate readings of system date and system time). Loaded entries were UTC already.
+- Entry `date` and `time` are still system date and system time, but read as one moment:
+  two separate readings could pair the old date with the new time around midnight. Entries
+  read back by `load( )` carry UTC, as before.
 - Entry `user_name` is the technical user name. The alias, up to 40 characters, was cut to
   the 12 characters of the field and matched neither the alias nor the user.
 - `log_contains_error( )`, `log_contains_warning( )` and `get_message_count( )` read
@@ -63,7 +67,8 @@ behaviour changes are listed under *Changed* and *Fixed*.
 - `get_message_count( )` accepts the severity in lower case.
 - The emergency log is written through `zif_cloud_logger_persistence`
   (`open_emergency_log`, `mirror_message`, `mirror_exception`), like every other database
-  access. `zif_cloud_logger_system~system_time` is gone. Both interfaces are internal seams,
+  access. `zif_cloud_logger_system~system_time` became `system_moment` (date and time
+  together). Both interfaces are internal seams,
   not released API.
 - `zcl_cloud_logger_benchmark` prints the internal error trail after the volume run, so a
   refused delete is visible.
@@ -71,7 +76,7 @@ behaviour changes are listed under *Changed* and *Fixed*.
 ### Added
 - `zcl_cloud_logger_conversion`: the pure conversions shared by logger and fake (severity,
   free-text split, exception key, text fallback, search). Internal, not released.
-- Tests: 197 (93 before). A contract test runs 14 scenarios against the real logger and the
+- Tests: 198 (93 before). A contract test runs 14 scenarios against the real logger and the
   fake and compares everything a consumer can observe; the emergency log, `load( )` through
   an injected persistence and the Application Log items (context prefix, cut at 200
   characters) are covered for the first time. One test (`when_merge_then_items_copied`)
@@ -82,8 +87,8 @@ behaviour changes are listed under *Changed* and *Fixed*.
 
 ### Not in this release
 - Releasing logs from Application Log memory (`release_memory`) waits for the off-stack stub.
-- A logger without Application Log object (`db_save = abap_false`) is unchanged and still
-  unverified on a real system.
+- A logger that keeps its entries in memory only, without Application Log object. In unit
+  tests `zcl_cloud_logger_fake` does that.
 
 ## [2.2.0] - 2026-09-17
 

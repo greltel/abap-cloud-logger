@@ -62,8 +62,8 @@ CLASS zcl_cloud_logger DEFINITION
     "! @parameter enable_emergency_log   | abap_true mirrors every entry into a second, immediately
     "!                                     persisted log via XCO BAL (best-effort, one commit on a
     "!                                     second connection per entry, see README)
-    "! @parameter object                 | Application Log object (BAL); required when db_save or
-    "!                                     enable_emergency_log is abap_true
+    "! @parameter object                 | Application Log object (BAL); always required - the
+    "!                                     Application Log accepts no header without it
     "! @parameter subobject              | Application Log subobject
     "! @parameter ext_number             | External ID; also part of the multiton key
     "! @parameter db_save                | abap_true persists on save_application_log; abap_false makes save a no-op
@@ -88,7 +88,8 @@ CLASS zcl_cloud_logger DEFINITION
     "!
     "! <p>Loads the log with the given handle from the database and returns a logger
     "! that continues writing to it: the persisted items become internal log
-    "! entries (their <em>item</em> and <em>context</em> stay initial), further
+    "! entries (their <em>item</em> and <em>context</em> stay initial, date and
+    "! time are UTC, as the Application Log stores them), further
     "! <em>log_*</em> calls append, <em>save_application_log( )</em> updates the
     "! same log. A log that was saved without entries loads empty. The instance is
     "! registered under the log's own object / subobject / external id, so
@@ -117,8 +118,8 @@ CLASS zcl_cloud_logger DEFINITION
     "! (local friends) inject doubles.</p>
     "!
     "! @parameter enable_emergency_log   | abap_true mirrors entries via the persistence's emergency log
-    "! @parameter object                 | Application Log object (BAL); required when db_save or
-    "!                                     enable_emergency_log is abap_true
+    "! @parameter object                 | Application Log object (BAL); always required - the
+    "!                                     Application Log accepts no header without it
     "! @parameter subobject              | Application Log subobject
     "! @parameter ext_number             | External ID for the log
     "! @parameter db_save                | abap_true persists on save_application_log
@@ -342,8 +343,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
   METHOD constructor.
     DATA effective_system TYPE REF TO zif_cloud_logger_system.
 
-    " Both the main log and the emergency log are written under the log object
-    IF object IS INITIAL AND ( db_save = abap_true OR enable_emergency_log = abap_true ).
+    " The Application Log refuses a header without object, also for a log that is
+    " never saved; reported here by name instead of as a creation failure
+    IF object IS INITIAL.
       RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>object_required
                                                   log_object = object ).
     ENDIF.
@@ -958,15 +960,15 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD record_entry.
-    " One reading of the clock per entry: date and time cannot disagree around midnight
-    DATA(stamp) = system->now( ).
+    " System date and time, read as one moment: they cannot disagree around midnight
+    DATA(moment) = system->system_moment( ).
 
     INSERT VALUE #( BASE entry
                     type      = entry-symsg-msgty
                     context   = context
                     user_name = user_name
-                    date      = stamp_date( stamp )
-                    time      = stamp_time( stamp ) ) INTO TABLE log_messages.
+                    date      = moment-date
+                    time      = moment-time ) INTO TABLE log_messages.
 
     count_entry( entry-symsg-msgty ).
   ENDMETHOD.
