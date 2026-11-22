@@ -1,6 +1,6 @@
 # ABAP Cloud Logger
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.3.0-blue)](CHANGELOG.md)
 [![Tests](https://github.com/greltel/abap-cloud-logger/actions/workflows/ci.yml/badge.svg)](https://github.com/greltel/abap-cloud-logger/actions/workflows/ci.yml)
 [![ABAP Cloud](https://img.shields.io/badge/ABAP-Cloud%20Ready-green)](https://abaplint.app/stats/greltel/abap-cloud-logger/object_classifications)
 [![Code Statistics](https://img.shields.io/badge/CodeStatistics-abaplint-blue)](https://abaplint.app/stats/greltel/abap-cloud-logger)
@@ -279,9 +279,9 @@ Good to know:
 * Logs are saved with *keep until expiry*: housekeeping leaves them alone until
   `expiry_date` (default: today + 5 days), so choose a far-future expiry date with that in
   mind. SAP documents the flag as "it is not allowed to delete the log before the expiry
-  date"; on S/4HANA 2023 FPS03 `reset_appl_log( abap_true )` before the expiry date raised
-  no error in the benchmark. If your system refuses the delete, the refusal is in the
-  internal error trail.
+  date"; on S/4HANA 2023 FPS03 `reset_appl_log( abap_true )` nevertheless deleted a saved log
+  before its expiry date (checked in SLG1). If your system refuses the delete, the refusal
+  is in the internal error trail.
 * One Application Log holds at most 999,999 items; for more, save and reset per batch.
 * Authorizations (`S_APPL_LOG` for the log object and subobject): activity 03 to read a log
   back with `load( )`, activity 06 to delete one with `reset_appl_log( abap_true )`.
@@ -507,7 +507,7 @@ checklist.
 
 | Check | Result | Where |
 |---|---|---|
-| ABAP Unit | 198 tests | off-stack on every commit (197; one needs the real Application Log runtime), all of them in ADT on S/4HANA 2023 FPS03 (ABAP 7.58) before a release |
+| ABAP Unit | 198 tests, all green | ADT on S/4HANA 2023 FPS03 (ABAP 7.58); off-stack on every commit (197, one needs the real Application Log runtime) |
 | ATC, variant `ABAP_CLOUD_READINESS` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
 | ATC, variant `S4HANA_READINESS_2023` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
 | abaplint, 178 rules, language version Cloud, API snapshot `steampunk-2305-api` | 0 findings | [GitHub Actions](https://github.com/greltel/abap-cloud-logger/actions/workflows/ci.yml) |
