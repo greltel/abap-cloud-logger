@@ -69,9 +69,8 @@ returns the `if_bali_log` object). What it adds:
 2. The Application Log object `Z_CLOUD_LOG_SAMPLE` (sub-object `SETUP`) ships with the
    repository and is used by the tests and the demo. For your own logs create an Application
    Log object in the *Maintain Application Log Object* app (Fiori) or `SLG0` (on-premise).
-   `db_save = abap_true` and `enable_emergency_log = abap_true` require an object. A logger
-   with `db_save = abap_false` is meant to work without one; that path is verified off-stack
-   only so far, so pass an object when you can.
+   Every logger needs an object, also with `db_save = abap_false`: the Application Log
+   accepts no log without one. In unit tests, `zcl_cloud_logger_fake` needs none.
 3. Run the ABAP Unit tests of `zcl_cloud_logger`, `zcl_cloud_logger_conversion`,
    `zcl_cloud_logger_fake` and `zcl_cloud_logger_view_console`.
 
@@ -90,7 +89,7 @@ Every `log_*` method returns the logger, so calls chain. Every writing method ra
 
 ```abap
 DATA(logger) = zcl_cloud_logger=>get_instance(
-    object               = 'ZMYAPP'          " Application Log object (required for db_save or emergency log)
+    object               = 'ZMYAPP'          " Application Log object (required)
     subobject            = 'IMPORT'
     ext_number           = |{ run_id }|      " part of the instance key
     db_save              = abap_true         " abap_false: save_application_log( ) is a no-op
@@ -123,7 +122,6 @@ What it costs and what it leaves behind:
   They stay on the database until they expire.
 * **Merged entries are not mirrored.** `merge_logs( )` copies entries that the other logger
   already mirrored itself, if it had an emergency log.
-* **It needs an object.** Without one, `get_instance( )` raises `object_required`.
 
 Free text is mirrored as message `Z_CLOUD_LOGGER 001` so the severity survives; exceptions
 are mirrored with their severity (A and X as error — XCO has no higher one). XCO records an
@@ -214,9 +212,10 @@ DATA(bapiret2) = logger->get_messages_as_bapiret2( ).
 and ignores the initial ones. The severity queries and `get_message_count( )` read counters
 that are kept with the entries; they do not scan the log.
 
-Each entry carries the technical user name and the date and time it was added. Date and time
-are UTC and come from one time stamp, the same convention the Application Log uses for its
-items.
+Each entry carries the technical user name and the system date and system time at which it
+was added; the two are read together, so they cannot disagree around midnight. Entries that
+`load( )` reads back from the database carry UTC, because that is what the Application Log
+stores.
 
 ### RAP
 
@@ -277,11 +276,12 @@ recorded in the internal error trail.
 
 Good to know:
 
-* Logs are saved with *keep until expiry*, and SAP documents that flag as "it is not allowed
-  to delete the log before the expiry date". So a log stays on the database until
-  `expiry_date` (default: today + 5 days); expect `reset_appl_log( abap_true )` to be refused
-  before that — the refusal shows in the internal error trail — and choose a far-future
-  expiry date with that in mind.
+* Logs are saved with *keep until expiry*: housekeeping leaves them alone until
+  `expiry_date` (default: today + 5 days), so choose a far-future expiry date with that in
+  mind. SAP documents the flag as "it is not allowed to delete the log before the expiry
+  date"; on S/4HANA 2023 FPS03 `reset_appl_log( abap_true )` before the expiry date raised
+  no error in the benchmark. If your system refuses the delete, the refusal is in the
+  internal error trail.
 * One Application Log holds at most 999,999 items; for more, save and reset per batch.
 * Authorizations (`S_APPL_LOG` for the log object and subobject): activity 03 to read a log
   back with `load( )`, activity 06 to delete one with `reset_appl_log( abap_true )`.
@@ -400,7 +400,7 @@ the class constants:
 | textid | Message | When |
 |---|---|---|
 | `error_in_creation` | 003 | `cl_bali_log` refused to create the log or header (e.g. unknown log object) |
-| `object_required` | 006 | `db_save = abap_true` or `enable_emergency_log = abap_true` without an Application Log object |
+| `object_required` | 006 | no Application Log object was passed |
 | `invalid_trim_limit` | 008 | negative `trim_limit`, in `get_instance( )` and `load( )` |
 | `config_mismatch` | 007 | an instance with the same key exists with different settings |
 | `error_in_logging` | 004 | the Application Log rejected an entry (for a BAPIRET2 table: the first rejected row, raised after all rows) |
@@ -472,7 +472,7 @@ for the two internal seams (`zif_cloud_logger_system`, `zif_cloud_logger_persist
 * **Multiton.** One instance per object / subobject / external id, created lazily by
   `get_instance( )`, removed by `free( )`. A released instance is dead: writes raise
   `instance_released`, queries return empty results.
-* **Two seams.** All environment access (date, time stamp, user, `sy-msg*`) goes
+* **Two seams.** All environment access (date, time, time stamp, user, `sy-msg*`) goes
   through `zif_cloud_logger_system`; all database access — saving, loading, deleting and the
   emergency log — through `zif_cloud_logger_persistence`. Production defaults are injected
   by the constructor; the tests inject fixed-clock and spy doubles, so the unit tests never
@@ -507,7 +507,7 @@ checklist.
 
 | Check | Result | Where |
 |---|---|---|
-| ABAP Unit | 197 tests | off-stack on every commit (196; one needs the real Application Log runtime), all of them in ADT on S/4HANA 2023 FPS03 (ABAP 7.58) before a release |
+| ABAP Unit | 198 tests | off-stack on every commit (197; one needs the real Application Log runtime), all of them in ADT on S/4HANA 2023 FPS03 (ABAP 7.58) before a release |
 | ATC, variant `ABAP_CLOUD_READINESS` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
 | ATC, variant `S4HANA_READINESS_2023` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
 | abaplint, 178 rules, language version Cloud, API snapshot `steampunk-2305-api` | 0 findings | [GitHub Actions](https://github.com/greltel/abap-cloud-logger/actions/workflows/ci.yml) |

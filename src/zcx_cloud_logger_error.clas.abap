@@ -54,7 +54,7 @@ CLASS zcx_cloud_logger_error DEFINITION
         attr4 TYPE scx_attrname VALUE '',
       END OF error_in_emergency_log.
     CONSTANTS:
-      "! db_save or enable_emergency_log was requested without an Application Log object
+      "! A logger was requested without an Application Log object
       BEGIN OF object_required,
         msgid TYPE symsgid VALUE 'Z_CLOUD_LOGGER',
         msgno TYPE symsgno VALUE '006',

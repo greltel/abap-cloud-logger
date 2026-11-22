@@ -65,6 +65,7 @@ CLASS ltc_cloud_logger DEFINITION FINAL
     METHODS when_get_instance_then_bound    FOR TESTING RAISING cx_static_check.
     METHODS given_unknown_object_raises     FOR TESTING RAISING cx_static_check.
     METHODS given_no_object_db_save_raises  FOR TESTING RAISING cx_static_check.
+    METHODS given_no_object_then_raises     FOR TESTING RAISING cx_static_check.
     METHODS given_neg_trim_limit_raises     FOR TESTING RAISING cx_static_check.
     METHODS given_same_params_then_same     FOR TESTING RAISING cx_static_check.
     METHODS given_omitted_params_no_raise   FOR TESTING RAISING cx_static_check.
@@ -223,6 +224,21 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
         cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
                                             exp = zcx_cloud_logger_error=>error_in_creation
                                             msg = `Unknown object must be reported as creation error` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_no_object_then_raises.
+    " The Application Log refuses a header without object, with or without db_save
+    TRY.
+        DATA(logger) = zcl_cloud_logger=>get_instance( ext_number = 'NO_OBJECT_IN_MEMORY'
+                                                       db_save    = abap_false ).
+        logger->free( ).
+        cl_abap_unit_assert=>fail( `A logger without object must raise` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
+                                            exp = zcx_cloud_logger_error=>object_required
+                                            msg = `Missing object must be reported as object_required` ).
     ENDTRY.
   ENDMETHOD.
 
@@ -1490,6 +1506,8 @@ CLASS ltd_fixed_system DEFINITION FINAL FOR TESTING.
 
     "! Time stamps not yet handed out by now( )
     DATA queued_stamps TYPE time_stamps READ-ONLY.
+    "! How often date and time were read as one moment
+    DATA moment_reads  TYPE i           READ-ONLY.
 
     METHODS queue_stamps
       IMPORTING stamps TYPE time_stamps.
@@ -1522,6 +1540,12 @@ CLASS ltd_fixed_system IMPLEMENTATION.
 
   METHOD zif_cloud_logger_system~system_date.
     result = today.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger_system~system_moment.
+    moment_reads += 1.
+    result = VALUE #( date = today
+                      time = fixed_time ).
   ENDMETHOD.
 
   METHOD zif_cloud_logger_system~now.
@@ -1775,7 +1799,7 @@ CLASS ltc_cloud_logger_isolated DEFINITION FINAL
     METHODS given_equal_stamps_order_kept   FOR TESTING RAISING cx_static_check.
 
     " entries
-    METHODS given_one_stamp_then_date_time  FOR TESTING RAISING cx_static_check.
+    METHODS given_entry_then_system_moment  FOR TESTING RAISING cx_static_check.
     METHODS given_loaded_then_counts_right  FOR TESTING RAISING cx_static_check.
 
     " a rejecting Application Log
@@ -2337,23 +2361,26 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
                                         msg = `Entries with equal time stamps must keep their order` ).
   ENDMETHOD.
 
-  METHOD given_one_stamp_then_date_time.
-    system->queue_stamps( VALUE #( ( ltd_fixed_system=>after_midnight )
-                                   ( ltd_fixed_system=>second_now ) ) ).
+  METHOD given_entry_then_system_moment.
+    " The UTC clock is on the next day already; the entry shows system date and time
+    system->queue_stamps( VALUE #( ( ltd_fixed_system=>after_midnight ) ) ).
 
-    cut->log_string_add( `just after midnight` ).
+    cut->log_string_add( `late in the evening, system time` ).
 
     DATA(messages) = cut->get_messages( ).
 
     cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-date
-                                        exp = CONV d( '20260917' )
-                                        msg = `The entry date must come from the entry's time stamp` ).
+                                        exp = ltd_fixed_system=>fixed_date
+                                        msg = `The entry date must be the system date` ).
     cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-time
-                                        exp = CONV t( '000001' )
-                                        msg = `The entry time must come from the same time stamp` ).
+                                        exp = ltd_fixed_system=>fixed_time
+                                        msg = `The entry time must be the system time` ).
+    cl_abap_unit_assert=>assert_equals( act = system->moment_reads
+                                        exp = 1
+                                        msg = `Date and time must be read together, once per entry` ).
     cl_abap_unit_assert=>assert_equals( act = lines( system->queued_stamps )
                                         exp = 1
-                                        msg = `The clock must be read once per entry` ).
+                                        msg = `An entry must not consume the UTC clock of the timer` ).
   ENDMETHOD.
 
   METHOD given_loaded_then_counts_right.

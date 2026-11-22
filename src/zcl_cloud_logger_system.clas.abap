@@ -17,6 +17,17 @@ CLASS zcl_cloud_logger_system IMPLEMENTATION.
     result = cl_abap_context_info=>get_system_date( ).
   ENDMETHOD.
 
+  METHOD zif_cloud_logger_system~system_moment.
+    result-date = cl_abap_context_info=>get_system_date( ).
+    result-time = cl_abap_context_info=>get_system_time( ).
+
+    " Midnight passed between the two readings: read both again, on the new day
+    IF cl_abap_context_info=>get_system_date( ) <> result-date.
+      result-date = cl_abap_context_info=>get_system_date( ).
+      result-time = cl_abap_context_info=>get_system_time( ).
+    ENDIF.
+  ENDMETHOD.
+
   METHOD zif_cloud_logger_system~now.
     GET TIME STAMP FIELD result.
   ENDMETHOD.
