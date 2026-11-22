@@ -47,7 +47,7 @@
      <SPRSL>E</SPRSL>
      <ARBGB>Z_CLOUD_LOGGER</ARBGB>
      <MSGNR>006</MSGNR>
-     <TEXT>Application Log object is required when db_save is enabled.</TEXT>
+     <TEXT>Application Log object is required for db_save or the emergency log.</TEXT>
     </T100>
     <T100>
      <SPRSL>E</SPRSL>

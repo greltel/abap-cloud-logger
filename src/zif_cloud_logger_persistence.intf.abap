@@ -1,6 +1,8 @@
 "! <p class="shorttext synchronized" lang="en">Cloud Logger persistence</p>
 "! Database access of the logger, isolated so that unit tests never write an
 "! Application Log. Production uses {@link zcl_cloud_logger_persistence}.
+"! The emergency log is part of it: an adapter keeps the emergency log it
+"! opened, so one adapter serves one logger.
 INTERFACE zif_cloud_logger_persistence
   PUBLIC.
 
@@ -43,5 +45,30 @@ INTERFACE zif_cloud_logger_persistence
   METHODS delete_log
     IMPORTING log TYPE REF TO if_bali_log
     RAISING   cx_bali_runtime.
+
+  "! Opens the emergency log: a second log that is written to the database
+  "! entry by entry, with its own commit, independent of the caller's LUW.
+  "! The following mirror calls write to it; opening again starts a new one.
+  "! Failures surface as exceptions of the cx_no_check family (XCO), so the
+  "! caller catches cx_root.
+  "! @parameter object      | Application Log object
+  "! @parameter subobject   | Application Log subobject
+  "! @parameter external_id | External id of the emergency log
+  METHODS open_emergency_log
+    IMPORTING !object     TYPE cl_bali_header_setter=>ty_object
+              subobject   TYPE cl_bali_header_setter=>ty_subobject
+              external_id TYPE cl_bali_header_setter=>ty_external_id.
+
+  "! Writes a T100 message to the emergency log opened before.
+  "! @parameter symsg | Message type, class, number and variables
+  METHODS mirror_message
+    IMPORTING symsg TYPE symsg.
+
+  "! Writes an exception to the emergency log opened before.
+  "! @parameter exception | Exception to write
+  "! @parameter severity  | Severity of the entry
+  METHODS mirror_exception
+    IMPORTING !exception TYPE REF TO cx_root
+              severity   TYPE symsgty.
 
 ENDINTERFACE.

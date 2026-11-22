@@ -4,6 +4,7 @@
     "z_cloud_logger.msag",
     "zcl_cloud_logger.clas",
     "zcl_cloud_logger_benchmark",
+    "zcl_cloud_logger_conversion",
     "zcl_cloud_logger_demo",
     "zcl_cloud_logger_fake",
     "zcl_cloud_logger_persistence",
@@ -42,6 +43,14 @@
     "setup": {
       "filename": "../offstack/setup.mjs",
       "preFunction": "setup"
-    }
+    },
+    "skip": [
+      {
+        "object": "ZCL_CLOUD_LOGGER",
+        "class": "ltc_cloud_logger",
+        "method": "when_merge_then_items_copied",
+        "note": "open-abap-bal: add_all_items_from_other_log does not copy items. Runs in ADT only."
+      }
+    ]
   }
 }

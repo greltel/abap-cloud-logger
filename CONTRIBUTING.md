@@ -38,7 +38,10 @@ The abaplint configuration enforces most of it; the points people most often tri
 * No commented-out code, no magic literals (use the constants in `zif_cloud_logger`),
   lines ≤ 120 characters.
 * Environment access only through `zif_cloud_logger_system`, database access only through
-  `zif_cloud_logger_persistence`.
+  `zif_cloud_logger_persistence` (the emergency log included).
+* Anything the logger and `zcl_cloud_logger_fake` must do alike — severities, text
+  conversions, searches — goes into `zcl_cloud_logger_conversion` as a pure function, not
+  into both classes.
 
 ## Tests
 
@@ -47,13 +50,21 @@ The abaplint configuration enforces most of it; the points people most often tri
 * `ltc_cloud_logger` tests the public factory against the in-memory Application Log.
   `ltc_cloud_logger_isolated` builds the logger directly with the doubles
   `ltd_fixed_system` and `ltd_persistence_spy`; put anything that depends on time, user or
-  the database there.
+  the database there — the emergency log and `load( )` included. `ltd_rejecting_log` is an
+  Application Log that refuses an item, for the error paths.
+* `ltc_logger_contract` runs each scenario against the real logger and against
+  `zcl_cloud_logger_fake` and compares what a consumer can observe. A change in the
+  behaviour of a `log_*` or query method gets a scenario there.
+* The pure conversions are tested in `zcl_cloud_logger_conversion`, the fake's own extras
+  (counters, released flag) in `zcl_cloud_logger_fake`.
 * No `WAIT`, no `SELECT`, no `COMMIT WORK` in tests. `RISK LEVEL HARMLESS` means it.
 * Off-stack the tests run against an in-memory SQLite database (`offstack/setup.mjs`), which
   registers every `src/*.aplo.json` in BALOBJ / BALSUB, so the Application Log object check
   works there too. A new Application Log object only needs its `.aplo.json` in `src`.
-* A test that still cannot run off-stack is skipped via `abap_transpile.json` with a note
-  saying why. Today nothing is skipped.
+* A test that still cannot run off-stack is skipped via `options.skip` in
+  `abap_transpile.json` with a note saying why. Today that is one test:
+  `ltc_cloud_logger->when_merge_then_items_copied` (the stub of
+  `add_all_items_from_other_log` copies nothing). It must be green in ADT.
 
 ## What the off-stack pipeline does not catch
 
@@ -77,6 +88,32 @@ And the other direction — things the system does right that the off-stack runt
 * `cl_abap_tstmp=>subtract` never raises off-stack and only approximates; the real kernel
   rejected two `timestampl` operands. The logger computes durations itself.
 
+The Application Log and XCO stubs are simpler than the kernel. A green pipeline says nothing
+about these; check them in ADT when you touch the code around them:
+
+* `if_bali_log~add_all_items_from_other_log` is an empty stub: `merge_logs( )` never moves
+  items off-stack.
+* `xco_cp_bal=>for` is unbound: the emergency log cannot run off-stack. The logger reaches it
+  only through `zif_cloud_logger_persistence`, and the tests use the spy.
+* `cl_bali_header_setter=>create` skips its checks for an initial object; the kernel does not.
+* `get_all_items( )` returns an empty table for a log without items; the kernel raises
+  `cx_bali_not_found`.
+* `cl_bali_log_db=>load_log` hands back the very object that was saved: no database, no
+  authorization check, no "already loaded".
+* `add_item` never raises. Use `ltd_rejecting_log` to reach the error paths.
+* `SORT` is stable on Node.js; on the kernel only with `STABLE`.
+* `cl_abap_context_info`: date and time are local time, and the alias is the user name.
+* `release_memory`, `enqueue` and `dequeue` of the Application Log do not exist in the stub,
+  nor does the class `xco_cp_message`.
+* The message runtime: `xco_cp=>message( )->get_text( )` never raises and never returns an
+  empty text off-stack. A message that does not exist is rendered as `TYPE:CLASS:NUMBER`
+  plus the variables, the format of `MESSAGE ... INTO`. Whether XCO returns the same on the
+  kernel decides how the BAPIRET2 text fallback is reached there;
+  `given_unknown_ret2_then_text` tells.
+* The text pool always holds the master-language texts.
+* `REF #( itab[ ... ] OPTIONAL )` raises `cx_sy_itab_line_not_found` off-stack when the line
+  is missing. Use `line_exists( )` or `VALUE #( ... OPTIONAL )`.
+
 And one that is neither: a NUMC field with value `000` **is initial** — on the system and
 off-stack alike. Never use `IS INITIAL` on a message number to detect "no message"; check
 the message class.
@@ -92,7 +129,8 @@ the message class.
 ## Pull request checklist
 
 - [ ] `npm run lint` and `npm test` are green
-- [ ] ABAP Unit is green in ADT (`zcl_cloud_logger`, `zcl_cloud_logger_view_console`)
+- [ ] ABAP Unit is green in ADT (`zcl_cloud_logger`, `zcl_cloud_logger_conversion`,
+      `zcl_cloud_logger_fake`, `zcl_cloud_logger_view_console`)
 - [ ] ATC with the Cloud readiness variant of your system shows no new findings
 - [ ] Public API changes are documented in ABAP Doc, README and `CHANGELOG.md`
 - [ ] Breaking changes are called out in the pull-request description

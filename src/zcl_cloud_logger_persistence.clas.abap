@@ -1,6 +1,7 @@
 "! <p class="shorttext synchronized" lang="en">Cloud Logger persistence (production)</p>
-"! Thin adapter over {@link cl_bali_log_db}. The only place that reads
-"! Application Log items back from the database.
+"! Thin adapter over {@link cl_bali_log_db} and, for the emergency log, over
+"! XCO BAL. The only place that reads Application Log items back from the
+"! database and the only place that writes the emergency log.
 CLASS zcl_cloud_logger_persistence DEFINITION
   PUBLIC
   FINAL
@@ -12,6 +13,9 @@ CLASS zcl_cloud_logger_persistence DEFINITION
   PRIVATE SECTION.
     " The Application Log stores item time stamps in UTC; loaded entries keep it
     CONSTANTS utc_time_zone TYPE c LENGTH 6 VALUE 'UTC'.
+
+    " The emergency log opened last; one adapter serves one logger
+    DATA emergency_log TYPE REF TO if_xco_cp_bal_log.
 
     " Maps one persisted item to an internal log entry; a T100 item keeps its key
     METHODS entry_from_item
@@ -44,10 +48,40 @@ CLASS zcl_cloud_logger_persistence IMPLEMENTATION.
     result-external_id = header->external_id.
     result-expiry_date = header->expiry_date.
 
-    LOOP AT result-log->get_all_items( ) REFERENCE INTO DATA(item_entry).
+    TRY.
+        DATA(items) = result-log->get_all_items( ).
+      CATCH cx_bali_not_found.
+        " A log that was saved without entries is a valid log: it loads empty
+        RETURN.
+    ENDTRY.
+
+    LOOP AT items REFERENCE INTO DATA(item_entry).
       INSERT entry_from_item( item     = item_entry->item
                               log_user = header->log_user ) INTO TABLE result-entries.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger_persistence~open_emergency_log.
+    emergency_log = xco_cp_bal=>for->database( )->log->create( iv_object      = object
+                                                               iv_subobject   = subobject
+                                                               iv_external_id = external_id ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger_persistence~mirror_message.
+    emergency_log->add_message( symsg ).
+  ENDMETHOD.
+
+  METHOD zif_cloud_logger_persistence~mirror_exception.
+    " XCO knows error, warning, information and success: A and X are errors there
+    DATA(xco_severity) = SWITCH symsgty( severity
+                                         WHEN zif_cloud_logger=>c_message_type-abandon
+                                           OR zif_cloud_logger=>c_message_type-terminate
+                                           THEN zif_cloud_logger=>c_message_type-error
+                                         ELSE severity ).
+
+    emergency_log->add_exception(
+        ix_exception = exception
+        io_severity  = xco_cp=>message( VALUE #( msgty = xco_severity ) )->get_type( ) ).
   ENDMETHOD.
 
   METHOD entry_from_item.
