@@ -7,6 +7,14 @@ runtime as `zif_cloud_logger=>c_version`.
 
 ## [Unreleased]
 
+### Added
+- `get_messages( )`, `get_messages_flat( )`, `get_messages_as_bapiret2( )` and
+  `get_messages_rap( )` take an optional `min_severity` (`W` returns W/E/A/X, `E` returns
+  E/A/X, `A` or `X` returns A/X), the same rule `log_bapiret2_table_add( )` uses. A caller
+  that needs the errors of a large log no longer gets every entry converted, and
+  `get_messages_rap( )` creates message objects only for what it returns. Calls without
+  the parameter behave as before. `zcl_cloud_logger_fake` filters the same way.
+
 ### Changed
 - `free( )` and `reset_appl_log( )` release the log from Application Log memory
   (`if_bali_log~release_memory`). Before, they only dropped the reference, and the log

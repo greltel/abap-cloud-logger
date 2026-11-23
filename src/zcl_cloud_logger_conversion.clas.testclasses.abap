@@ -561,3 +561,121 @@ CLASS ltc_message_text IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
+
+
+CLASS ltc_entries_reaching DEFINITION FINAL
+  FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+
+  PRIVATE SECTION.
+    DATA entries TYPE zif_cloud_logger=>log_messages.
+
+    METHODS setup.
+
+    METHODS given_no_minimum_then_all       FOR TESTING.
+    METHODS given_min_i_then_all            FOR TESTING.
+    METHODS given_min_w_then_four           FOR TESTING.
+    METHODS given_min_e_then_order_kept     FOR TESTING.
+    METHODS given_min_a_then_a_and_x        FOR TESTING.
+    METHODS given_lower_min_then_filtered   FOR TESTING.
+    METHODS given_blank_type_then_dropped   FOR TESTING.
+
+    "! The severities of the entries, one character each, in their order
+    METHODS severities_of
+      IMPORTING !entries      TYPE zif_cloud_logger=>log_messages
+      RETURNING VALUE(result) TYPE string.
+
+ENDCLASS.
+
+
+CLASS ltc_entries_reaching IMPLEMENTATION.
+
+  METHOD setup.
+    entries = VALUE #( ( type = 'S' message = `success` )
+                       ( type = 'E' message = `first error` )
+                       ( type = 'I' message = `information` )
+                       ( type = 'W' message = `warning` )
+                       ( type = 'X' message = `terminate` )
+                       ( type = 'E' message = `second error` )
+                       ( type = 'A' message = `abandon` ) ).
+  ENDMETHOD.
+
+  METHOD severities_of.
+    LOOP AT entries REFERENCE INTO DATA(entry).
+      result = result && entry->type.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD given_no_minimum_then_all.
+    DATA(kept) = zcl_cloud_logger_conversion=>entries_reaching( entries = entries
+                                                                minimum = space ).
+
+    cl_abap_unit_assert=>assert_equals( act = kept
+                                        exp = entries
+                                        msg = `Without a minimum every entry must be returned` ).
+  ENDMETHOD.
+
+  METHOD given_min_i_then_all.
+    DATA(kept) = zcl_cloud_logger_conversion=>entries_reaching( entries = entries
+                                                                minimum = 'I' ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( kept )
+                                        exp = 7
+                                        msg = `Minimum I is no filter` ).
+  ENDMETHOD.
+
+  METHOD given_min_w_then_four.
+    DATA(kept) = zcl_cloud_logger_conversion=>entries_reaching( entries = entries
+                                                                minimum = 'W' ).
+
+    cl_abap_unit_assert=>assert_equals( act = severities_of( kept )
+                                        exp = `EWXEA`
+                                        msg = `Minimum W must keep W, E, A and X` ).
+  ENDMETHOD.
+
+  METHOD given_min_e_then_order_kept.
+    DATA(kept) = zcl_cloud_logger_conversion=>entries_reaching( entries = entries
+                                                                minimum = 'E' ).
+
+    cl_abap_unit_assert=>assert_equals( act = severities_of( kept )
+                                        exp = `EXEA`
+                                        msg = `Minimum E must keep E, A and X` ).
+    cl_abap_unit_assert=>assert_equals( act = kept[ 3 ]-message
+                                        exp = `second error`
+                                        msg = `The entries must keep their order and content` ).
+  ENDMETHOD.
+
+  METHOD given_min_a_then_a_and_x.
+    DATA(from_a) = zcl_cloud_logger_conversion=>entries_reaching( entries = entries
+                                                                  minimum = 'A' ).
+    DATA(from_x) = zcl_cloud_logger_conversion=>entries_reaching( entries = entries
+                                                                  minimum = 'X' ).
+
+    cl_abap_unit_assert=>assert_equals( act = severities_of( from_a )
+                                        exp = `XA`
+                                        msg = `Minimum A must keep A and X` ).
+    cl_abap_unit_assert=>assert_equals( act = from_x
+                                        exp = from_a
+                                        msg = `Minimum X must filter like A` ).
+  ENDMETHOD.
+
+  METHOD given_lower_min_then_filtered.
+    DATA(kept) = zcl_cloud_logger_conversion=>entries_reaching( entries = entries
+                                                                minimum = 'e' ).
+
+    cl_abap_unit_assert=>assert_equals( act = severities_of( kept )
+                                        exp = `EXEA`
+                                        msg = `A lower-case minimum must filter like E` ).
+  ENDMETHOD.
+
+  METHOD given_blank_type_then_dropped.
+    INSERT VALUE #( message = `entry without severity` ) INTO TABLE entries.
+
+    DATA(kept) = zcl_cloud_logger_conversion=>entries_reaching( entries = entries
+                                                                minimum = 'W' ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( kept )
+                                        exp = 5
+                                        msg = `An entry without severity reaches no minimum` ).
+  ENDMETHOD.
+
+ENDCLASS.
