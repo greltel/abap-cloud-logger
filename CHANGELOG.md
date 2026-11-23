@@ -5,6 +5,17 @@ All notable changes to ABAP Cloud Logger are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The installed version is available at
 runtime as `zif_cloud_logger=>c_version`.
 
+## [Unreleased]
+
+### Changed
+- `free( )` and `reset_appl_log( )` release the log from Application Log memory
+  (`if_bali_log~release_memory`). Before, they only dropped the reference, and the log
+  stayed in memory for the rest of the session: a job that saved and reset per batch kept
+  every batch there. Consequence: an `if_bali_log` reference taken from `get_log_handle( )`
+  is invalidated by the next `free( )` or `reset_appl_log( )` and refuses further calls.
+  `reset_appl_log( abap_true )` deletes the persisted log first and releases afterwards,
+  because the Application Log does not delete a released log.
+
 ## [2.3.0] - 2026-11-22
 
 Hardening after a full audit of 2.2.0. No signature of the released API changed; the
@@ -90,7 +101,8 @@ entry in the internal error trail.
   once", where the context is persisted. CONTRIBUTING: the list of kernel-only behaviour.
 
 ### Not in this release
-- Releasing logs from Application Log memory (`release_memory`) waits for the off-stack stub.
+- Releasing logs from Application Log memory (`release_memory`) waited for the off-stack
+  stub; see *Unreleased*.
 - A logger that keeps its entries in memory only, without Application Log object. In unit
   tests `zcl_cloud_logger_fake` does that.
 
