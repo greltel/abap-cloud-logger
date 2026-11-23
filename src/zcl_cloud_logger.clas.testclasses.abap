@@ -1951,6 +1951,8 @@ CLASS ltc_cloud_logger_isolated DEFINITION FINAL
     METHODS given_open_fails_then_raises    FOR TESTING RAISING cx_static_check.
     METHODS given_reopen_fails_then_trail   FOR TESTING RAISING cx_static_check.
     METHODS given_no_emergency_no_mirror    FOR TESTING RAISING cx_static_check.
+    METHODS when_freed_then_no_persistence  FOR TESTING RAISING cx_static_check.
+    METHODS given_freed_emergency_contract  FOR TESTING RAISING cx_static_check.
 
     METHODS emergency_logger
       IMPORTING ext_number    TYPE cl_bali_header_setter=>ty_external_id DEFAULT 'EMERGENCY'
@@ -1970,6 +1972,7 @@ CLASS ltc_cloud_logger_isolated DEFINITION FINAL
     METHODS given_unknown_handle_raises     FOR TESTING RAISING cx_static_check.
     METHODS given_active_handle_raises      FOR TESTING RAISING cx_static_check.
     METHODS given_active_key_raises         FOR TESTING RAISING cx_static_check.
+    METHODS given_active_key_log_released   FOR TESTING RAISING cx_static_check.
     METHODS given_neg_trim_then_no_read     FOR TESTING RAISING cx_static_check.
 
     " registry and expiry
@@ -2057,6 +2060,7 @@ CLASS ltc_logger_contract DEFINITION FINAL
     METHODS when_merged_then_same           FOR TESTING RAISING cx_static_check.
     METHODS when_freed_then_same            FOR TESTING RAISING cx_static_check.
     METHODS when_filtered_then_same         FOR TESTING RAISING cx_static_check.
+    METHODS when_lower_sev_searched_same    FOR TESTING RAISING cx_static_check.
 
     METHODS observed
       IMPORTING logger        TYPE REF TO zif_cloud_logger
@@ -2776,6 +2780,85 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
                                          msg = `Without enable_emergency_log nothing is mirrored` ).
   ENDMETHOD.
 
+  METHOD when_freed_then_no_persistence.
+    " The adapter holds the emergency log: a freed logger must not keep it alive
+    DATA(logger) = NEW zcl_cloud_logger( object               = test_object
+                                         subobject            = test_subobject
+                                         ext_number           = 'FREED'
+                                         db_save              = abap_false
+                                         enable_emergency_log = abap_true
+                                         system               = system
+                                         persistence          = persistence ).
+
+    logger->free( ).
+
+    cl_abap_unit_assert=>assert_not_bound( act = logger->persistence
+                                           msg = `free( ) must drop the reference to the persistence` ).
+
+    logger->free( ).
+
+    cl_abap_unit_assert=>assert_not_bound( act = logger->persistence
+                                           msg = `A second free( ) must leave the reference initial` ).
+  ENDMETHOD.
+
+  METHOD given_freed_emergency_contract.
+    " The contract of a released instance, here for a logger that mirrored to an
+    " emergency log: nothing may reach for the persistence that is gone
+    DATA refusals TYPE STANDARD TABLE OF scx_t100key WITH EMPTY KEY.
+
+    DATA(logger) = emergency_logger( 'FREED_CONTRACT' ).
+    logger->log_string_add( `mirrored before free` ).
+    logger->free( ).
+    logger->free( ).
+
+    TRY.
+        logger->log_string_add( `after free` ).
+      CATCH zcx_cloud_logger_error INTO DATA(write_refused).
+        INSERT write_refused->if_t100_message~t100key INTO TABLE refusals.
+    ENDTRY.
+    TRY.
+        logger->log_exception_add( NEW cx_sy_zerodivide( ) ).
+      CATCH zcx_cloud_logger_error INTO DATA(exception_refused).
+        INSERT exception_refused->if_t100_message~t100key INTO TABLE refusals.
+    ENDTRY.
+    TRY.
+        logger->save_application_log( ).
+      CATCH zcx_cloud_logger_error INTO DATA(save_refused).
+        INSERT save_refused->if_t100_message~t100key INTO TABLE refusals.
+    ENDTRY.
+    TRY.
+        logger->reset_appl_log( abap_true ).
+      CATCH zcx_cloud_logger_error INTO DATA(reset_refused).
+        INSERT reset_refused->if_t100_message~t100key INTO TABLE refusals.
+    ENDTRY.
+
+    cl_abap_unit_assert=>assert_equals( act = lines( refusals )
+                                        exp = 4
+                                        msg = `Every writing call on a released instance must raise` ).
+    LOOP AT refusals INTO DATA(refusal).
+      cl_abap_unit_assert=>assert_equals( act = refusal
+                                          exp = zcx_cloud_logger_error=>instance_released
+                                          msg = `A released instance must refuse with instance_released` ).
+    ENDLOOP.
+    cl_abap_unit_assert=>assert_equals( act = logger->get_message_count( )
+                                        exp = 0
+                                        msg = `Queries on a released instance must return empty results` ).
+    cl_abap_unit_assert=>assert_equals( act = logger->log_is_empty( )
+                                        exp = abap_true
+                                        msg = `A released instance must report itself empty` ).
+    cl_abap_unit_assert=>assert_initial( act = logger->get_handle( )
+                                         msg = `The handle must be gone after free( )` ).
+    cl_abap_unit_assert=>assert_equals( act = logger->search_message( VALUE #( msgty = 'W' ) )
+                                        exp = abap_false
+                                        msg = `Searching a released instance must not find anything` ).
+    cl_abap_unit_assert=>assert_equals( act = lines( persistence->mirrored_messages )
+                                        exp = 1
+                                        msg = `Nothing may be mirrored after free( )` ).
+    cl_abap_unit_assert=>assert_equals( act = persistence->delete_calls + persistence->save_calls
+                                        exp = 0
+                                        msg = `A released instance must not reach the database` ).
+  ENDMETHOD.
+
   METHOD when_load_then_attached.
     persistence->answer_load_with( persisted_log( ) ).
 
@@ -2868,6 +2951,27 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
         cl_abap_unit_assert=>assert_equals( act = error->if_t100_message~t100key
                                             exp = zcx_cloud_logger_error=>already_active
                                             msg = `The conflict must be reported as already_active` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_active_key_log_released.
+    " The log was read from the database before the key conflict shows: it must
+    " not stay behind in Application Log memory
+    DATA(loaded) = persisted_log( ).
+    registered_logger( 'LOADED' ).
+    persistence->answer_load_with( loaded ).
+
+    TRY.
+        load_through_spy( handle = 'HANDLE_OF_SAVED_LOG' ).
+        cl_abap_unit_assert=>fail( `A key that is in use must not be taken over by a loaded log` ).
+
+      CATCH zcx_cloud_logger_error INTO DATA(error).
+        cl_abap_unit_assert=>assert_equals( act = loaded-log->is_invalidated( )
+                                            exp = abap_true
+                                            msg = `The refused log must be released from Application Log memory` ).
+        cl_abap_unit_assert=>assert_equals( act = error->log_handle
+                                            exp = 'HANDLE_OF_SAVED_LOG'
+                                            msg = `The error must name the handle that was asked for` ).
     ENDTRY.
   ENDMETHOD.
 
@@ -3157,6 +3261,29 @@ CLASS ltc_logger_contract IMPLEMENTATION.
                               ( zcx_cloud_logger_error=>instance_released ) )
         msg = `Both must refuse to write after free( ) with instance_released` ).
     assert_same_with( 0 ).
+  ENDMETHOD.
+
+  METHOD when_lower_sev_searched_same.
+    " Every other method takes the severity in lower case; so does the search
+    LOOP AT both INTO DATA(logger).
+      logger->log_message_add( VALUE #( msgty = 'E'
+                                        msgid = 'Z_CLOUD_LOGGER'
+                                        msgno = '002'
+                                        msgv1 = 'ZORDER' ) ).
+
+      cl_abap_unit_assert=>assert_equals( act = logger->search_message( VALUE #( msgty = 'e' ) )
+                                          exp = abap_true
+                                          msg = `A lower-case severity must find the error` ).
+      cl_abap_unit_assert=>assert_equals( act = logger->search_message( VALUE #( msgid = 'Z_CLOUD_LOGGER'
+                                                                                 msgty = 'e' ) )
+                                          exp = abap_true
+                                          msg = `A lower-case severity must combine with the message class` ).
+      cl_abap_unit_assert=>assert_equals( act = logger->search_message( VALUE #( msgty = 'w' ) )
+                                          exp = abap_false
+                                          msg = `A lower-case severity that is not in the log must not match` ).
+    ENDLOOP.
+
+    assert_same_with( 1 ).
   ENDMETHOD.
 
   METHOD when_filtered_then_same.

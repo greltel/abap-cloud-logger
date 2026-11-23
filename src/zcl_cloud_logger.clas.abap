@@ -254,7 +254,7 @@ CLASS zcl_cloud_logger DEFINITION
     METHODS delete_from_database.
 
     " Removes a log from Application Log memory - dropping the reference frees nothing
-    METHODS release_from_memory
+    CLASS-METHODS release_from_memory
       IMPORTING !log TYPE REF TO if_bali_log.
 
     " Keeps the registry in step with the expiry of the log created by a reset
@@ -429,8 +429,12 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     IF line_exists( logger_instances[ log_object    = loaded-object
                                       log_subobject = loaded-subobject
                                       extnumber     = loaded-external_id ] ).
+      " The log is in memory by now and nobody will own it: give it back
+      release_from_memory( loaded-log ).
+
       RAISE EXCEPTION NEW zcx_cloud_logger_error( textid     = zcx_cloud_logger_error=>already_active
-                                                  log_object = loaded-object ).
+                                                  log_object = loaded-object
+                                                  log_handle = handle ).
     ENDIF.
 
     DATA(logger) = NEW zcl_cloud_logger( object      = loaded-object
@@ -798,6 +802,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     CLEAR timer_start.
     CLEAR context.
     CLEAR internal_errors.
+    " Last: the adapter holds the emergency log, and every method that uses it
+    " is behind ensure_active( )
+    CLEAR persistence.
   ENDMETHOD.
 
   METHOD zif_cloud_logger~get_messages.
