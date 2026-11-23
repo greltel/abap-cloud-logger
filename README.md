@@ -517,7 +517,7 @@ checklist.
 
 | Check | Result | Where |
 |---|---|---|
-| ABAP Unit | 216 tests, all green | ADT on S/4HANA 2023 FPS03 (ABAP 7.58); off-stack on every commit (215, one needs the real Application Log runtime) |
+| ABAP Unit | 225 tests, all green | ADT on S/4HANA 2023 FPS03 (ABAP 7.58); off-stack on every commit (224, one needs the real Application Log runtime) |
 | ATC, variant `ABAP_CLOUD_READINESS` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
 | ATC, variant `S4HANA_READINESS_2023` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
 | abaplint, 178 rules, language version Cloud, API snapshot `steampunk-2305-api` | 0 findings | [GitHub Actions](https://github.com/greltel/abap-cloud-logger/actions/workflows/ci.yml) |
