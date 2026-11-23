@@ -5,7 +5,10 @@ All notable changes to ABAP Cloud Logger are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The installed version is available at
 runtime as `zif_cloud_logger=>c_version`.
 
-## [Unreleased]
+## [2.4.0] - 2026-11-23
+
+Two additions that matter for large logs. Verified on S/4HANA 2023 FPS03 (ABAP 7.58): ABAP
+Unit green in ADT (216 tests), benchmark run without an entry in the internal error trail.
 
 ### Added
 - `get_messages( )`, `get_messages_flat( )`, `get_messages_as_bapiret2( )` and
@@ -110,7 +113,7 @@ entry in the internal error trail.
 
 ### Not in this release
 - Releasing logs from Application Log memory (`release_memory`) waited for the off-stack
-  stub; see *Unreleased*.
+  stub; it came with 2.4.0.
 - A logger that keeps its entries in memory only, without Application Log object. In unit
   tests `zcl_cloud_logger_fake` does that.
 
