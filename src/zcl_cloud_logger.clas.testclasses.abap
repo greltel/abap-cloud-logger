@@ -157,6 +157,11 @@ CLASS ltc_cloud_logger DEFINITION FINAL
     METHODS given_merge_then_counts_added   FOR TESTING RAISING cx_static_check.
     METHODS given_reset_then_counts_zero    FOR TESTING RAISING cx_static_check.
 
+    " Application Log memory
+    METHODS when_free_then_log_released     FOR TESTING RAISING cx_static_check.
+    METHODS when_reset_then_old_released    FOR TESTING RAISING cx_static_check.
+    METHODS given_merged_source_freed_kept  FOR TESTING RAISING cx_static_check.
+
     " configuration checks
     METHODS given_used_key_neg_trim_raises  FOR TESTING RAISING cx_static_check.
     METHODS given_emergency_diff_raises     FOR TESTING RAISING cx_static_check.
@@ -1379,6 +1384,46 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
                                         msg = `A reset logger must not report old errors` ).
   ENDMETHOD.
 
+  METHOD when_free_then_log_released.
+    DATA(log) = cut->get_log_handle( ).
+
+    cut->free( ).
+
+    cl_abap_unit_assert=>assert_equals( act = log->is_invalidated( )
+                                        exp = abap_true
+                                        msg = `free( ) must release the log from Application Log memory` ).
+  ENDMETHOD.
+
+  METHOD when_reset_then_old_released.
+    DATA(old_log) = cut->get_log_handle( ).
+
+    cut->reset_appl_log( ).
+
+    cl_abap_unit_assert=>assert_equals( act = old_log->is_invalidated( )
+                                        exp = abap_true
+                                        msg = `A reset must release the replaced log from Application Log memory` ).
+    cl_abap_unit_assert=>assert_equals( act = cut->get_log_handle( )->is_invalidated( )
+                                        exp = abap_false
+                                        msg = `The fresh log must be usable` ).
+  ENDMETHOD.
+
+  METHOD given_merged_source_freed_kept.
+    DATA(second) = secondary_logger( 'RELEASED' ).
+    second->log_string_add( string = `merged, then its logger was freed`
+                            msgty  = 'E' ).
+    cut->merge_logs( second ).
+
+    second->free( ).
+    cut->log_string_add( `still writable` ).
+
+    cl_abap_unit_assert=>assert_equals( act = cut->get_message_count( )
+                                        exp = 2
+                                        msg = `Releasing a merged logger must not touch the target` ).
+    cl_abap_unit_assert=>assert_equals( act = cut->get_log_handle( )->is_invalidated( )
+                                        exp = abap_false
+                                        msg = `The target log must stay in memory` ).
+  ENDMETHOD.
+
   METHOD given_used_key_neg_trim_raises.
     TRY.
         zcl_cloud_logger=>get_instance( object     = test_object
@@ -1448,22 +1493,18 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD when_merge_then_items_copied.
-    " Needs the real Application Log runtime: the off-stack stub does not copy items
+    " Needs the real Application Log runtime: the off-stack stub does not copy items.
+    " The source is freed before the check: the copied item must survive the
+    " release of the log it came from.
     DATA(second) = secondary_logger( 'ITEMS' ).
+    second->log_string_add( `one item` ).
 
-    TRY.
-        second->log_string_add( `one item` ).
-
-        cut->merge_logs( second ).
-
-        cl_abap_unit_assert=>assert_equals( act = lines( cut->get_log_handle( )->get_all_items( ) )
-                                            exp = 1
-                                            msg = `merge_logs must copy the Application Log items` ).
-
-      CLEANUP.
-        second->free( ).
-    ENDTRY.
+    cut->merge_logs( second ).
     second->free( ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( cut->get_log_handle( )->get_all_items( ) )
+                                        exp = 1
+                                        msg = `merge_logs must copy the Application Log items` ).
   ENDMETHOD.
 
   METHOD given_empty_saved_then_load_ok.
@@ -1574,6 +1615,8 @@ CLASS ltd_persistence_spy DEFINITION FINAL FOR TESTING.
 
     DATA save_calls           TYPE i                   READ-ONLY.
     DATA delete_calls         TYPE i                   READ-ONLY.
+    "! abap_true when delete_log( ) received a log whose memory was released already
+    DATA deleted_released_log TYPE abap_boolean        READ-ONLY.
     DATA saved_log            TYPE REF TO if_bali_log  READ-ONLY.
     DATA saved_on_2nd_db_conn TYPE abap_boolean        READ-ONLY.
     DATA saved_to_appl_job    TYPE abap_boolean        READ-ONLY.
@@ -1737,6 +1780,7 @@ CLASS ltd_persistence_spy IMPLEMENTATION.
 
   METHOD zif_cloud_logger_persistence~delete_log.
     delete_calls += 1.
+    deleted_released_log = log->is_invalidated( ).
     IF fail_delete = abap_true.
       RAISE EXCEPTION NEW ltd_bali_failure( ).
     ENDIF.
@@ -1807,6 +1851,8 @@ CLASS ltc_cloud_logger_isolated DEFINITION FINAL
     METHODS given_row_rejected_rest_kept    FOR TESTING RAISING cx_static_check.
     METHODS given_data_fails_then_error     FOR TESTING RAISING cx_static_check.
     METHODS given_new_log_fails_no_delete   FOR TESTING RAISING cx_static_check.
+    METHODS given_reset_fails_log_kept      FOR TESTING RAISING cx_static_check.
+    METHODS when_reset_then_delete_first    FOR TESTING RAISING cx_static_check.
 
     " emergency log
     METHODS given_emergency_then_opened     FOR TESTING RAISING cx_static_check.
@@ -2473,6 +2519,40 @@ CLASS ltc_cloud_logger_isolated IMPLEMENTATION.
                                             exp = 0
                                             msg = `The persisted log must stay when its successor cannot be created` ).
     ENDTRY.
+  ENDMETHOD.
+
+  METHOD given_reset_fails_log_kept.
+    DATA(log)    = cl_bali_log=>create( ).
+    DATA(logger) = logger_on( log    = log
+                              object = 'Z_DUMMY_WRONG' ).
+
+    TRY.
+        logger->reset_appl_log( ).
+        cl_abap_unit_assert=>fail( `A reset that cannot create a new log must raise` ).
+
+      CATCH zcx_cloud_logger_error.
+        cl_abap_unit_assert=>assert_equals( act = log->is_invalidated( )
+                                            exp = abap_false
+                                            msg = `The old log must stay in memory when the reset fails` ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD when_reset_then_delete_first.
+    " The Application Log refuses to delete a log whose memory was released
+    DATA(logger)  = create_logger( abap_true ).
+    DATA(old_log) = logger->get_log_handle( ).
+
+    logger->reset_appl_log( abap_true ).
+
+    cl_abap_unit_assert=>assert_equals( act = persistence->delete_calls
+                                        exp = 1
+                                        msg = `The persisted log must be deleted` ).
+    cl_abap_unit_assert=>assert_equals( act = persistence->deleted_released_log
+                                        exp = abap_false
+                                        msg = `The log must be deleted before its memory is released` ).
+    cl_abap_unit_assert=>assert_equals( act = old_log->is_invalidated( )
+                                        exp = abap_true
+                                        msg = `After the delete the old log must be released` ).
   ENDMETHOD.
 
   METHOD given_emergency_then_opened.

@@ -283,7 +283,10 @@ INTERFACE zif_cloud_logger
   METHODS get_handle
     RETURNING VALUE(result) TYPE balloghndl.
 
-  "! Returns the underlying {@link if_bali_log} object for direct access.
+  "! Returns the underlying {@link if_bali_log} object for direct access. Do not
+  "! keep the reference: {@link zif_cloud_logger.METH:free} and
+  "! {@link zif_cloud_logger.METH:reset_appl_log} release the log from
+  "! Application Log memory, and a released log refuses every further call.
   "! @parameter result | Application Log object, unbound after {@link zif_cloud_logger.METH:free}
   METHODS get_log_handle
     RETURNING VALUE(result) TYPE REF TO if_bali_log.
@@ -299,7 +302,9 @@ INTERFACE zif_cloud_logger
   "! Discards all entries and starts a fresh Application Log with the same
   "! configuration. Timer and context are cleared as well. The instance stays
   "! registered and usable. The fresh log is created first: if that fails, the
-  "! old log is left as it is, in memory and on the database. Deleting needs
+  "! old log is left as it is, in memory and on the database. Otherwise the old
+  "! log is released from Application Log memory, so a job that saves and
+  "! resets per batch does not pile its batches up in memory. Deleting needs
   "! the authorization S_APPL_LOG with activity 06. A delete the database
   "! refuses is recorded in the internal error trail and does not stop the
   "! reset, so check {@link zif_cloud_logger.METH:get_internal_errors} when the
@@ -339,7 +344,7 @@ INTERFACE zif_cloud_logger
     RETURNING VALUE(result) TYPE abap_boolean.
 
   "! Removes the instance from the multiton registry and releases its
-  "! Application Log. The instance is dead afterwards: writing methods raise
+  "! Application Log from memory. The instance is dead afterwards: writing methods raise
   "! <em>instance_released</em>, queries return empty results. The next
   "! {@link zcl_cloud_logger.METH:get_instance} with the same key creates a
   "! new instance. Calling free( ) twice is harmless, also on a stale reference

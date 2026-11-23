@@ -98,13 +98,14 @@ about these; check them in ADT when you touch the code around them:
 * `cl_bali_header_setter=>create` skips its checks for an initial object; the kernel does not.
 * `get_all_items( )` returns an empty table for a log without items; the kernel raises
   `cx_bali_not_found`.
-* `cl_bali_log_db=>load_log` hands back the very object that was saved: no database, no
-  authorization check, no "already loaded".
+* `cl_bali_log_db` keeps a copy of a saved log in memory and `load_log` returns a copy of
+  it: no database, no authorization check, no "already loaded".
 * `add_item` never raises. Use `ltd_rejecting_log` to reach the error paths.
 * `SORT` is stable on Node.js; on the kernel only with `STABLE`.
 * `cl_abap_context_info`: date and time are local time, and the alias is the user name.
-* `release_memory`, `enqueue` and `dequeue` of the Application Log do not exist in the stub,
-  nor does the class `xco_cp_message`.
+* `enqueue` and `dequeue` of the Application Log do not exist in the stub, nor does the
+  class `xco_cp_message`. `release_memory` exists and invalidates the log, but nothing can
+  be said off-stack about the memory it frees.
 * The message runtime: `xco_cp=>message( )->get_text( )` never raises and never returns an
   empty text off-stack. A message that does not exist is rendered as `TYPE:CLASS:NUMBER`
   plus the variables, the format of `MESSAGE ... INTO`. Whether XCO returns the same on the

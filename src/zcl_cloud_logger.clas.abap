@@ -253,6 +253,10 @@ CLASS zcl_cloud_logger DEFINITION
 
     METHODS delete_from_database.
 
+    " Removes a log from Application Log memory - dropping the reference frees nothing
+    METHODS release_from_memory
+      IMPORTING !log TYPE REF TO if_bali_log.
+
     " Keeps the registry in step with the expiry of the log created by a reset
     METHODS update_registered_expiry.
 
@@ -758,6 +762,9 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
       delete_from_database( ).
     ENDIF.
 
+    " After the delete: the Application Log refuses to delete a released log
+    release_from_memory( log_handle ).
+
     log_handle       = new_log.
     effective_expiry = new_expiry.
     CLEAR log_messages.
@@ -783,6 +790,7 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
     ENDIF.
 
     released = abap_true.
+    release_from_memory( log_handle ).
     CLEAR log_handle.
     CLEAR log_messages.
     CLEAR counts.
@@ -1100,6 +1108,12 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
         record_internal_error( method_name = `reset_appl_log (db delete - log not persisted?)`
                                exception   = error ).
     ENDTRY.
+  ENDMETHOD.
+
+  METHOD release_from_memory.
+    IF log IS BOUND.
+      log->release_memory( ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD update_registered_expiry.
