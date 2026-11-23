@@ -5,7 +5,10 @@ All notable changes to ABAP Cloud Logger are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The installed version is available at
 runtime as `zif_cloud_logger=>c_version`.
 
-## [Unreleased]
+## [2.4.1] - 2026-11-23
+
+Four small corrections after a review of 2.4.0. No signature changed. Verified on S/4HANA
+2023 FPS03 (ABAP 7.58): ABAP Unit green in ADT (225 tests).
 
 ### Fixed
 - `load( )`: when the key of the loaded log (object / subobject / external id) was already
