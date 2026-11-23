@@ -252,21 +252,30 @@ INTERFACE zif_cloud_logger
     RETURNING VALUE(self)                TYPE REF TO zif_cloud_logger
     RAISING   zcx_cloud_logger_error.
 
-  "! Returns the internal log with all details, in insertion order.
-  "! @parameter result | Internal log entries
+  "! Returns the internal log with all details, in insertion order. The four
+  "! <em>get_messages*</em> methods take the same optional filter: <em>W</em>
+  "! keeps W/E/A/X, <em>E</em> keeps E/A/X, <em>A</em> or <em>X</em> keeps A/X.
+  "! Without it (or with I/S) every entry is returned.
+  "! @parameter min_severity | Lowest severity to return, upper or lower case
+  "! @parameter result       | Internal log entries
   METHODS get_messages
+    IMPORTING min_severity  TYPE symsgty OPTIONAL
     RETURNING VALUE(result) TYPE log_messages.
 
   "! Returns one rendered line per entry: <em>[context] TNNN(CLASS) - text</em>
   "! for T100 messages, the plain text otherwise.
-  "! @parameter result | Rendered lines
+  "! @parameter min_severity | Lowest severity to return, see {@link zif_cloud_logger.METH:get_messages}
+  "! @parameter result       | Rendered lines
   METHODS get_messages_flat
+    IMPORTING min_severity  TYPE symsgty OPTIONAL
     RETURNING VALUE(result) TYPE flat_messages.
 
   "! Returns the entries as BAPI return table. The <em>message</em> field is
   "! limited to its native 220 characters.
-  "! @parameter result | BAPI return table
+  "! @parameter min_severity | Lowest severity to return, see {@link zif_cloud_logger.METH:get_messages}
+  "! @parameter result       | BAPI return table
   METHODS get_messages_as_bapiret2
+    IMPORTING min_severity  TYPE symsgty OPTIONAL
     RETURNING VALUE(result) TYPE bapiret2_messages.
 
   "! Returns the entries as RAP behavior messages. T100 messages, and exceptions
@@ -274,8 +283,11 @@ INTERFACE zif_cloud_logger
   "! T100 key are wrapped in {@link zif_cloud_logger.DATA:c_free_text_message}
   "! (200 characters). The messages carry no <em>%tky</em> or <em>%element</em>:
   "! the caller builds the <em>reported</em> rows and binds them (see README).
-  "! @parameter result | Messages for a RAP <em>reported</em> response
+  "! With a filter only the entries that are returned become message objects.
+  "! @parameter min_severity | Lowest severity to return, see {@link zif_cloud_logger.METH:get_messages}
+  "! @parameter result       | Messages for a RAP <em>reported</em> response
   METHODS get_messages_rap
+    IMPORTING min_severity  TYPE symsgty OPTIONAL
     RETURNING VALUE(result) TYPE rap_messages.
 
   "! Returns the Application Log handle (BALLOGHNDL); initial after {@link zif_cloud_logger.METH:free}.

@@ -801,16 +801,17 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_cloud_logger~get_messages.
-    result = log_messages.
+    result = zcl_cloud_logger_conversion=>entries_reaching( entries = log_messages
+                                                            minimum = min_severity ).
   ENDMETHOD.
 
   METHOD zif_cloud_logger~get_messages_flat.
-    result = VALUE #( FOR msg IN log_messages
+    result = VALUE #( FOR msg IN zif_cloud_logger~get_messages( min_severity )
                       ( render_entry( msg ) ) ).
   ENDMETHOD.
 
   METHOD zif_cloud_logger~get_messages_as_bapiret2.
-    result = VALUE #( FOR msg IN log_messages
+    result = VALUE #( FOR msg IN zif_cloud_logger~get_messages( min_severity )
                       ( id         = msg-symsg-msgid
                         number     = msg-symsg-msgno
                         type       = msg-symsg-msgty
@@ -822,7 +823,7 @@ CLASS zcl_cloud_logger IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_cloud_logger~get_messages_rap.
-    result = VALUE #( FOR msg IN log_messages
+    result = VALUE #( FOR msg IN zif_cloud_logger~get_messages( min_severity )
                       ( COND #( WHEN msg-symsg-msgid IS NOT INITIAL
                                 THEN zcx_cloud_logger_message=>new_message_from_symsg( msg-symsg )
                                 ELSE zcx_cloud_logger_message=>new_message_from_symsg(

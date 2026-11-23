@@ -157,6 +157,17 @@ CLASS ltc_cloud_logger DEFINITION FINAL
     METHODS given_merge_then_counts_added   FOR TESTING RAISING cx_static_check.
     METHODS given_reset_then_counts_zero    FOR TESTING RAISING cx_static_check.
 
+    " getters with a minimum severity
+    METHODS given_min_sev_then_msgs_filter  FOR TESTING RAISING cx_static_check.
+    METHODS given_min_sev_then_flat_filter  FOR TESTING RAISING cx_static_check.
+    METHODS given_min_sev_then_ret2_filter  FOR TESTING RAISING cx_static_check.
+    METHODS given_min_sev_then_rap_filter   FOR TESTING RAISING cx_static_check.
+    METHODS given_lower_min_sev_getter      FOR TESTING RAISING cx_static_check.
+
+    "! One success, one warning, one error and one abandon entry
+    METHODS add_one_of_each
+      RAISING zcx_cloud_logger_error.
+
     " Application Log memory
     METHODS when_free_then_log_released     FOR TESTING RAISING cx_static_check.
     METHODS when_reset_then_old_released    FOR TESTING RAISING cx_static_check.
@@ -1384,6 +1395,81 @@ CLASS ltc_cloud_logger IMPLEMENTATION.
                                         msg = `A reset logger must not report old errors` ).
   ENDMETHOD.
 
+  METHOD add_one_of_each.
+    cut->log_string_add( string = `saved`
+                         msgty  = 'S' ).
+    cut->log_string_add( string = `check the price`
+                         msgty  = 'W' ).
+    cut->log_message_add( VALUE #( msgty = 'E'
+                                   msgid = 'Z_CLOUD_LOGGER'
+                                   msgno = '008' ) ).
+    cut->log_string_add( string = `run abandoned`
+                         msgty  = 'A' ).
+  ENDMETHOD.
+
+  METHOD given_min_sev_then_msgs_filter.
+    add_one_of_each( ).
+
+    DATA(messages) = cut->get_messages( 'E' ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( messages )
+                                        exp = 2
+                                        msg = `Minimum E must return the error and the abandon entry` ).
+    cl_abap_unit_assert=>assert_equals( act = messages[ 1 ]-symsg-msgno
+                                        exp = '008'
+                                        msg = `The returned entries must keep their details` ).
+    cl_abap_unit_assert=>assert_equals( act = lines( cut->get_messages( ) )
+                                        exp = 4
+                                        msg = `Filtering must not remove anything from the log` ).
+  ENDMETHOD.
+
+  METHOD given_min_sev_then_flat_filter.
+    add_one_of_each( ).
+
+    DATA(lines) = cut->get_messages_flat( 'A' ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines
+                                        exp = VALUE zif_cloud_logger=>flat_messages( ( `run abandoned` ) )
+                                        msg = `Minimum A must render the abandon entry only` ).
+  ENDMETHOD.
+
+  METHOD given_min_sev_then_ret2_filter.
+    add_one_of_each( ).
+
+    DATA(return) = cut->get_messages_as_bapiret2( 'W' ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( return )
+                                        exp = 3
+                                        msg = `Minimum W must return warning, error and abandon` ).
+    cl_abap_unit_assert=>assert_equals( act = return[ 1 ]-type
+                                        exp = 'W'
+                                        msg = `The success row must be left out` ).
+  ENDMETHOD.
+
+  METHOD given_min_sev_then_rap_filter.
+    add_one_of_each( ).
+
+    DATA(reported) = cut->get_messages_rap( 'E' ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( reported )
+                                        exp = 2
+                                        msg = `Minimum E must create two RAP messages, not four` ).
+    cl_abap_unit_assert=>assert_equals( act = reported[ 1 ]->m_severity
+                                        exp = if_abap_behv_message=>severity-error
+                                        msg = `The first RAP message must be the error` ).
+  ENDMETHOD.
+
+  METHOD given_lower_min_sev_getter.
+    add_one_of_each( ).
+
+    cl_abap_unit_assert=>assert_equals( act = lines( cut->get_messages_as_bapiret2( 'e' ) )
+                                        exp = 2
+                                        msg = `A lower-case minimum must filter like E` ).
+    cl_abap_unit_assert=>assert_equals( act = lines( cut->get_messages_rap( 'i' ) )
+                                        exp = 4
+                                        msg = `Minimum I is no filter` ).
+  ENDMETHOD.
+
   METHOD when_free_then_log_released.
     DATA(log) = cut->get_log_handle( ).
 
@@ -1970,13 +2056,16 @@ CLASS ltc_logger_contract DEFINITION FINAL
     METHODS when_reset_then_same            FOR TESTING RAISING cx_static_check.
     METHODS when_merged_then_same           FOR TESTING RAISING cx_static_check.
     METHODS when_freed_then_same            FOR TESTING RAISING cx_static_check.
+    METHODS when_filtered_then_same         FOR TESTING RAISING cx_static_check.
 
     METHODS observed
       IMPORTING logger        TYPE REF TO zif_cloud_logger
+                min_severity  TYPE symsgty OPTIONAL
       RETURNING VALUE(result) TYPE observation.
 
     METHODS rap_view_of
       IMPORTING logger        TYPE REF TO zif_cloud_logger
+                min_severity  TYPE symsgty OPTIONAL
       RETURNING VALUE(result) TYPE rap_views.
 
     "! One character per probe search: X for a hit, a dash for a miss
@@ -1985,9 +2074,11 @@ CLASS ltc_logger_contract DEFINITION FINAL
       RETURNING VALUE(result) TYPE string.
 
     "! Fails unless the fake shows what the real logger shows; the number of
-    "! entries is given so that two empty loggers cannot pass as equal
+    "! entries is given so that two empty loggers cannot pass as equal. With a
+    "! minimum severity the getters of both are asked with that filter.
     METHODS assert_same_with
-      IMPORTING entries TYPE i.
+      IMPORTING entries      TYPE i
+                min_severity TYPE symsgty OPTIONAL.
 
 ENDCLASS.
 
@@ -3068,11 +3159,43 @@ CLASS ltc_logger_contract IMPLEMENTATION.
     assert_same_with( 0 ).
   ENDMETHOD.
 
+  METHOD when_filtered_then_same.
+    LOOP AT both INTO DATA(logger).
+      logger->log_string_add( string = `success`
+                              msgty  = 'S' ).
+      logger->log_string_add( string = `information`
+                              msgty  = 'I' ).
+      logger->log_message_add( VALUE #( msgty = 'W'
+                                        msgid = 'Z_CLOUD_LOGGER'
+                                        msgno = '008' ) ).
+      logger->log_exception_add( NEW cx_sy_zerodivide( ) ).
+      logger->log_string_add( string = `abandon`
+                              msgty  = 'A' ).
+      logger->log_string_add( string = `terminate`
+                              msgty  = 'X' ).
+    ENDLOOP.
+
+    assert_same_with( 6 ).
+    assert_same_with( entries      = 6
+                      min_severity = 'I' ).
+    assert_same_with( entries      = 4
+                      min_severity = 'W' ).
+    assert_same_with( entries      = 3
+                      min_severity = 'e' ).
+    assert_same_with( entries      = 2
+                      min_severity = 'A' ).
+    assert_same_with( entries      = 2
+                      min_severity = 'X' ).
+    assert_same_with( entries      = 6
+                      min_severity = '?' ).
+  ENDMETHOD.
+
   METHOD observed.
-    result-entries  = CORRESPONDING #( logger->get_messages( ) ).
-    result-flat     = logger->get_messages_flat( ).
-    result-bapiret2 = logger->get_messages_as_bapiret2( ).
-    result-rap      = rap_view_of( logger ).
+    result-entries  = CORRESPONDING #( logger->get_messages( min_severity ) ).
+    result-flat     = logger->get_messages_flat( min_severity ).
+    result-bapiret2 = logger->get_messages_as_bapiret2( min_severity ).
+    result-rap      = rap_view_of( logger       = logger
+                                   min_severity = min_severity ).
     result-counts   = |all { logger->get_message_count( ) }| &&
                       | I { logger->get_message_count( 'I' ) }| &&
                       | S { logger->get_message_count( 'S' ) }| &&
@@ -3089,7 +3212,7 @@ CLASS ltc_logger_contract IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD rap_view_of.
-    LOOP AT logger->get_messages_rap( ) INTO DATA(message).
+    LOOP AT logger->get_messages_rap( min_severity ) INTO DATA(message).
       DATA(variables) = CAST if_t100_dyn_msg( message ).
 
       INSERT VALUE #( t100key   = CAST if_t100_message( message )->t100key
@@ -3122,12 +3245,14 @@ CLASS ltc_logger_contract IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD assert_same_with.
-    DATA(of_real) = observed( real ).
-    DATA(of_fake) = observed( fake ).
+    DATA(of_real) = observed( logger       = real
+                              min_severity = min_severity ).
+    DATA(of_fake) = observed( logger       = fake
+                              min_severity = min_severity ).
 
     cl_abap_unit_assert=>assert_equals( act = lines( of_real-entries )
                                         exp = entries
-                                        msg = `The scenario must leave the expected number of entries in the logger` ).
+                                        msg = `The real logger must return the expected number of entries` ).
     cl_abap_unit_assert=>assert_equals( act = of_fake-entries
                                         exp = of_real-entries
                                         msg = `The fake must keep the same message key, text, severity and context` ).

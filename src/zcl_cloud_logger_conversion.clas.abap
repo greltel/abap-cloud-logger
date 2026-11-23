@@ -31,6 +31,16 @@ CLASS zcl_cloud_logger_conversion DEFINITION
                 minimum       TYPE symsgty
       RETURNING VALUE(result) TYPE abap_boolean.
 
+    "! Returns the entries that reach a minimum severity, in their order. A
+    "! minimum that filters nothing (initial, I, S, unknown) returns all entries.
+    "! @parameter entries | Log entries
+    "! @parameter minimum | Lowest severity to keep, see {@link zcl_cloud_logger_conversion.METH:reaches_severity}
+    "! @parameter result  | Entries at or above the minimum
+    CLASS-METHODS entries_reaching
+      IMPORTING entries       TYPE zif_cloud_logger=>log_messages
+                minimum       TYPE symsgty
+      RETURNING VALUE(result) TYPE zif_cloud_logger=>log_messages.
+
     "! Packs free text into the carrier message
     "! {@link zif_cloud_logger.DATA:c_free_text_message} (&amp;1&amp;2&amp;3&amp;4).
     "! The text is cut into at most four slices of at most 50 characters. A slice
@@ -167,6 +177,22 @@ CLASS zcl_cloud_logger_conversion IMPLEMENTATION.
 
   METHOD reaches_severity.
     result = xsdbool( rank_of( severity ) >= rank_of( minimum ) ).
+  ENDMETHOD.
+
+  METHOD entries_reaching.
+    DATA(threshold) = rank_of( minimum ).
+
+    " No filter, no loop: the unfiltered getters stay as cheap as they were
+    IF threshold = severity_rank-unranked.
+      result = entries.
+      RETURN.
+    ENDIF.
+
+    LOOP AT entries REFERENCE INTO DATA(entry).
+      IF rank_of( entry->type ) >= threshold.
+        INSERT entry->* INTO TABLE result.
+      ENDIF.
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD rank_of.

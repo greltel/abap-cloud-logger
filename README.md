@@ -206,7 +206,12 @@ DATA(for_4711) = logger->search_message( VALUE #( msgid = 'ZMYAPP' msgv1 = '4711
 DATA(entries)  = logger->get_messages( ).                " full internal log
 DATA(lines)    = logger->get_messages_flat( ).           " "[ctx] E001(ZMYAPP) - text"
 DATA(bapiret2) = logger->get_messages_as_bapiret2( ).
+DATA(problems) = logger->get_messages_as_bapiret2( 'W' ).   " warnings and worse only
 ```
+
+All four `get_messages*` methods take an optional `min_severity`: `W` returns W/E/A/X, `E`
+returns E/A/X, `A` or `X` returns A/X. Without it you get every entry. The log itself is
+not changed.
 
 `search_message( )` compares the components you fill — class, number, severity, variables —
 and ignores the initial ones. The severity queries and `get_message_count( )` read counters
@@ -355,7 +360,10 @@ thousands of lines, save and reset per batch — `save_application_log( )` then
 `reset_appl_log( )` — instead of holding one log for the whole run, and keep `trim_limit`
 at its default. `reset_appl_log( )` and `free( )` release the old log from Application Log
 memory (`if_bali_log~release_memory`), so the batches do not pile up there. A reference you
-took from `get_log_handle( )` before is dead after that. `get_messages_flat( )` renders every entry, so call it once, not per line.
+took from `get_log_handle( )` before is dead after that. `get_messages_flat( )` renders
+every entry, so call it once, not per line. When only the problems matter, pass
+`min_severity` to the getters: `get_messages_rap( 'E' )` creates message objects for the
+errors, not for all entries.
 `log_contains_error( )`, `log_contains_warning( )` and `get_message_count( )` are constant
 time, so asking after every document is fine.
 
@@ -509,7 +517,7 @@ checklist.
 
 | Check | Result | Where |
 |---|---|---|
-| ABAP Unit | 203 tests, all green | ADT on S/4HANA 2023 FPS03 (ABAP 7.58); off-stack on every commit (202, one needs the real Application Log runtime) |
+| ABAP Unit | 216 tests, all green | ADT on S/4HANA 2023 FPS03 (ABAP 7.58); off-stack on every commit (215, one needs the real Application Log runtime) |
 | ATC, variant `ABAP_CLOUD_READINESS` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
 | ATC, variant `S4HANA_READINESS_2023` | 0 findings | ADT on S/4HANA 2023 FPS03, 2026-09-16 |
 | abaplint, 178 rules, language version Cloud, API snapshot `steampunk-2305-api` | 0 findings | [GitHub Actions](https://github.com/greltel/abap-cloud-logger/actions/workflows/ci.yml) |
