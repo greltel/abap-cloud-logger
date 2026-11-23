@@ -5,6 +5,25 @@ All notable changes to ABAP Cloud Logger are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The installed version is available at
 runtime as `zif_cloud_logger=>c_version`.
 
+## [Unreleased]
+
+### Fixed
+- `load( )`: when the key of the loaded log (object / subobject / external id) was already
+  in use, `already_active` was raised but the log that had just been read stayed in
+  Application Log memory. It is released now, and the exception carries the handle
+  (`log_handle`), like the handle check before it.
+- `search_message( )` compared the severity exactly, so `VALUE #( msgty = 'e' )` found
+  nothing although every other method takes the severity in lower case. The severity of
+  the search is matched in upper or lower case; class, number and variables as before.
+  `zcl_cloud_logger_fake` behaves the same.
+- `zcl_cloud_logger_view_console`: a log with abandon or terminate entries showed counts
+  that did not add up (`1 entries (E:0 W:0 I:0 S:0)`). The header names ` A:<n>` and
+  ` X:<n>` when such entries exist; without them it is unchanged.
+
+### Changed
+- `free( )` also drops the logger's reference to its persistence adapter, which holds the
+  emergency log. A stale reference to a freed logger no longer keeps it alive.
+
 ## [2.4.0] - 2026-11-23
 
 Two additions that matter for large logs. Verified on S/4HANA 2023 FPS03 (ABAP 7.58): ABAP

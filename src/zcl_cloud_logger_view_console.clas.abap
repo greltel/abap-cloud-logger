@@ -54,11 +54,21 @@ CLASS zcl_cloud_logger_view_console IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD write_header.
+    DATA(abandoned)  = logger->get_message_count( zif_cloud_logger=>c_message_type-abandon ).
+    DATA(terminated) = logger->get_message_count( zif_cloud_logger=>c_message_type-terminate ).
+
+    " A and X are rare: they are named only when they occur, so the usual header
+    " keeps its form and the counts still add up to the entries
+    DATA(fatal_counts) = COND string( WHEN abandoned > 0
+                                      THEN | A:{ abandoned }| ) &&
+                         COND string( WHEN terminated > 0
+                                      THEN | X:{ terminated }| ).
+
     out->write( |ABAP Cloud Logger { zif_cloud_logger=>c_version } - { message_count } entries | &&
                 |(E:{ logger->get_message_count( zif_cloud_logger=>c_message_type-error ) } | &&
                 |W:{ logger->get_message_count( zif_cloud_logger=>c_message_type-warning ) } | &&
                 |I:{ logger->get_message_count( zif_cloud_logger=>c_message_type-information ) } | &&
-                |S:{ logger->get_message_count( zif_cloud_logger=>c_message_type-success ) })| ).
+                |S:{ logger->get_message_count( zif_cloud_logger=>c_message_type-success ) }{ fatal_counts })| ).
   ENDMETHOD.
 
 ENDCLASS.

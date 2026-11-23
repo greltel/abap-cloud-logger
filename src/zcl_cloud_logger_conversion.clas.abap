@@ -83,7 +83,8 @@ CLASS zcl_cloud_logger_conversion DEFINITION
 
     "! Tells whether a message matches a search. Initial components of the
     "! search are not compared; message number 000 is the initial value of the
-    "! NUMC field and therefore means "any number".
+    "! NUMC field and therefore means "any number". The severity of the search
+    "! is matched in upper or lower case, all other components exactly.
     "! @parameter symsg  | Message of a log entry
     "! @parameter search | Message parts to match
     "! @parameter result | abap_true when every filled search component matches
@@ -377,10 +378,13 @@ CLASS zcl_cloud_logger_conversion IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD key_matches.
+    " Entries carry their severity in upper case; a search may spell it either way
+    DATA(search_severity) = CONV symsgty( to_upper( search-msgty ) ).
+
     result = xsdbool(
           ( search-msgid IS INITIAL OR symsg-msgid = search-msgid )
       AND ( search-msgno IS INITIAL OR symsg-msgno = search-msgno )
-      AND ( search-msgty IS INITIAL OR symsg-msgty = search-msgty ) ).
+      AND ( search-msgty IS INITIAL OR symsg-msgty = search_severity ) ).
   ENDMETHOD.
 
   METHOD variables_match.

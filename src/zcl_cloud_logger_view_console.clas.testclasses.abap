@@ -50,6 +50,9 @@ CLASS ltc_console_viewer DEFINITION FINAL
     METHODS given_empty_log_then_header FOR TESTING RAISING cx_static_check.
     METHODS given_trail_then_trail_written  FOR TESTING RAISING cx_static_check.
     METHODS given_unbound_logger_no_write   FOR TESTING RAISING cx_static_check.
+    METHODS given_a_and_x_then_counted      FOR TESTING RAISING cx_static_check.
+    METHODS given_only_x_then_x_counted     FOR TESTING RAISING cx_static_check.
+    METHODS given_no_a_x_then_header_same   FOR TESTING RAISING cx_static_check.
 
 ENDCLASS.
 
@@ -136,6 +139,58 @@ CLASS ltc_console_viewer IMPLEMENTATION.
 
     cl_abap_unit_assert=>assert_initial( act = console->calls
                                          msg = `An unbound logger must not write anything` ).
+  ENDMETHOD.
+
+  METHOD given_a_and_x_then_counted.
+    logger->log_string_add( string = `run abandoned`
+                            msgty  = 'A'
+       )->log_string_add( string = `terminated`
+                          msgty  = 'X' ).
+
+    cut->view( logger ).
+
+    DATA(header) = console->calls[ 1 ].
+
+    cl_abap_unit_assert=>assert_char_cp( act = header-text
+                                         exp = '*A:1*'
+                                         msg = `Header must count the abandon entries` ).
+    cl_abap_unit_assert=>assert_char_cp( act = header-text
+                                         exp = '*X:1*'
+                                         msg = `Header must count the terminate entries` ).
+    cl_abap_unit_assert=>assert_char_cp( act = header-text
+                                         exp = '*2 entries (E:0 W:0 I:0 S:0 A:1 X:1)'
+                                         msg = `The counts in the header must add up to the entries` ).
+  ENDMETHOD.
+
+  METHOD given_only_x_then_x_counted.
+    logger->log_string_add( string = `terminated`
+                            msgty  = 'X' ).
+
+    cut->view( logger ).
+
+    cl_abap_unit_assert=>assert_char_cp( act = console->calls[ 1 ]-text
+                                         exp = '*1 entries (E:0 W:0 I:0 S:0 X:1)'
+                                         msg = `Only the severities that occur are added to the header` ).
+  ENDMETHOD.
+
+  METHOD given_no_a_x_then_header_same.
+    logger->log_string_add( string = `error`
+                            msgty  = 'E'
+       )->log_string_add( `warning` ).
+
+    cut->view( logger ).
+
+    DATA(header) = console->calls[ 1 ].
+
+    cl_abap_unit_assert=>assert_char_cp( act = header-text
+                                         exp = '*2 entries (E:1 W:1 I:0 S:0)'
+                                         msg = `Without abandon or terminate entries the header keeps its form` ).
+    cl_abap_unit_assert=>assert_char_np( act = header-text
+                                         exp = '*A:*'
+                                         msg = `No abandon count without abandon entries` ).
+    cl_abap_unit_assert=>assert_char_np( act = header-text
+                                         exp = '*X:*'
+                                         msg = `No terminate count without terminate entries` ).
   ENDMETHOD.
 
 ENDCLASS.

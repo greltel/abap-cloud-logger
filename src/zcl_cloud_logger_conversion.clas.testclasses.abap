@@ -425,6 +425,8 @@ CLASS ltc_search DEFINITION FINAL
     METHODS given_key_only_then_match       FOR TESTING.
     METHODS given_other_number_no_match     FOR TESTING.
     METHODS given_empty_search_then_match   FOR TESTING.
+    METHODS given_lower_msgty_then_match    FOR TESTING.
+    METHODS given_other_lower_msgty_no_hit  FOR TESTING.
 
 ENDCLASS.
 
@@ -481,6 +483,23 @@ CLASS ltc_search IMPLEMENTATION.
                                                            search = VALUE #( ) )
         exp = abap_true
         msg = `An initial search matches every message` ).
+  ENDMETHOD.
+
+  METHOD given_lower_msgty_then_match.
+    cl_abap_unit_assert=>assert_equals(
+        act = zcl_cloud_logger_conversion=>matches_search( symsg  = entry
+                                                           search = VALUE #( msgid = 'CL'
+                                                                             msgty = 'w' ) )
+        exp = abap_true
+        msg = `The severity of the search must be compared in upper case` ).
+  ENDMETHOD.
+
+  METHOD given_other_lower_msgty_no_hit.
+    cl_abap_unit_assert=>assert_equals(
+        act = zcl_cloud_logger_conversion=>matches_search( symsg  = entry
+                                                           search = VALUE #( msgty = 'e' ) )
+        exp = abap_false
+        msg = `A different severity must not match, in whatever case` ).
   ENDMETHOD.
 
 ENDCLASS.

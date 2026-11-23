@@ -348,7 +348,9 @@ INTERFACE zif_cloud_logger
   "! Checks whether an entry matches the given message class, number, severity
   "! and/or message variables. Initial components are not compared; a completely
   "! initial search matches any entry. Message number 000 is the initial value
-  "! of the NUMC field and therefore means "any number".
+  "! of the NUMC field and therefore means "any number". The severity is matched
+  "! in upper or lower case, like everywhere else; class, number and variables
+  "! are matched exactly.
   "! @parameter search | Message key parts and variables to match
   "! @parameter result | abap_true when at least one entry matches
   METHODS search_message
